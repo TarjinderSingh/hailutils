@@ -12,7 +12,7 @@ from hail import *
 # Basic IO from text files 
 # Ported from glists.py in pyrunner
 
-def parse(filepath, split=False, sep=None, cols=None, skip = None, strip = True):
+def parse(filepath, split = False, sep = None, cols = None, skip = None, strip = True):
     """ skip is 1-based, and represents the actual lines skipped. ie. 3 means skip lines 1,2,3 """
     with hadoop_read(filepath) as f:
         lines = f.readlines()
