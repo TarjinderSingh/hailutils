@@ -426,12 +426,12 @@ def annotate_gnomad_frequencies(vds):
     gnomad_vds = (
         vds.hc
             .read('gs://sczmeta_exomes/data/gnomad_reference/release_v1.1/gnomad_merged.reduced.vep.r2.0.1.nonpsych.sites.vds')
-            .annotate_variants_expr('va = select(va, gnomad)')
+            .annotate_variants_expr('va = select(va, gnomad, nonpsych_gnomad)')
      )
     vds = vds.annotate_variants_vds(gnomad_vds, expr = 'va = merge(va, vds)')
     return(vds)
     
-def annotate_nonpsychexac_frequencies(vds):
+def annotate_nonpsych_exac_frequencies(vds):
     logger.info('Annotate with non-psych ExAC frequencies.')
     exac_vds = vds.hc.read('gs://exome-qc/resources/exac_release0.3.1/ExAC.r0.3.nonpsych.sites.vds')
     vds = vds.annotate_variants_vds(exac_vds, 'va.in_nonpsych_ExAC = vds.in_nonpsych_ExAC')
@@ -444,7 +444,7 @@ def annotate_discovEHR_frequencies(vds):
     return(vds)
 
 def annotate_cadd13(vds):
-    logger.info('Annotate with CADD scores.')
+    logger.info('Annotate with CADD 1.3 scores.')
     cadd_kt = (
         vds.hc
             .read_table('gs://exome-qc/resources/cadd/cadd1.3_whole_exome_SNVs.kt')
@@ -455,7 +455,7 @@ def annotate_cadd13(vds):
     return(vds)
 
 def annotate_cadd10(vds):
-    logger.info('Annotate with CADD scores.')
+    logger.info('Annotate with CADD 1.0 scores.')
     cadd_kt = (
         vds.hc
             .read_table('gs://exome-qc/resources/cadd/cadd1.0_whole_exome_SNVs.kt')
@@ -482,6 +482,7 @@ def annotate_constraint(vds):
                     'lambda_constrained',
                     'multiregional',
                     'mis_z',
+                    'pLI',
                     'n_regions'
                 ]
             )
@@ -501,16 +502,39 @@ def annotate_constraint(vds):
         root = 'va.constraint'
     )
 
-    logger.info('Annotate with loss-of-function intolerant genes.')
-    lof_intolerant_genes = set(mis_regions.filter('pLI >= 0.9').query('gene_id.collect().toSet()'))
-    vds = vds.annotate_global('global.lof_intolerant_genes', lof_intolerant_genes, TSet(TString()))
+    #logger.info('Annotate with loss-of-function intolerant genes.')
+    #lof_intolerant_genes = set(mis_regions.filter('pLI >= 0.9').query('gene_id.collect().toSet()'))
+    #vds = vds.annotate_global('global.lof_intolerant_genes', lof_intolerant_genes, TSet(TString()))
     
     logger.info('Annotate with missense intolerant genes.')
     mis_intolerant_genes = set(mis_regions.filter('mis_z >= 3.09').query('gene_id.collect().toSet()'))
     vds = vds.annotate_global('global.mis_intolerant_genes', mis_intolerant_genes, TSet(TString()))
     
-    logger.info('Annotate with genes that contain constrained regions.')
+    logger.info('Annotate with genes that contain      regions.')
     regional_intolerant_genes = set(mis_regions.filter('obs_exp <= 0.6').query('gene_id.collect().toSet()'))
     vds = vds.annotate_global('global.regional_intolerant_genes', regional_intolerant_genes, TSet(TString()))
 
+    return(vds)
+
+def annotate_nonpsych_lof_intolerant_genes(vds):
+    gene_set = (
+        vds.hc
+            .read_table('gs://exome-qc/resources/exac_release0.3.1/constraint/exac_constraint_nonpsych.kt')
+            .filter('pLI >= 0.9')
+            .query('gene_id.collect().toSet()')
+     )
+    
+    vds = (
+        vds
+            .annotate_global('global.lof_intolerant_genes', gene_set, TSet(TString()))
+            .annotate_variants_expr(
+                '''
+                va.in_lof_intolerant_gene = 
+                    if (! va.gene_id.filter(x => global.lof_intolerant_genes.contains(x)).isEmpty())
+                        true
+                    else
+                        false
+                '''
+            )
+    )
     return(vds)
