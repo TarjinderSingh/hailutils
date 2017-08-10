@@ -133,6 +133,21 @@ SO = ['transcript_ablation', # HIGH 0
       'feature_truncation',
       'intergenic_variant']
 
+
+def run_vep_pipeline(vds):
+    logger.info('Annotating with VEP.')
+    vds = vds.vep(config = '/vep/vep-gcloud.properties')
+
+    logger.info('Parsing VEP output.')
+    vds = (
+        parse_loftee(
+            parse_vep(
+                annotate_vep_global(vds)
+            )
+         )
+    )
+    return(vds)
+    
 def annotate_vep_global(vds):  
     ####
     # Extract protein-coding Ensembl IDs
@@ -354,4 +369,137 @@ def parse_loftee(vds):
             )
     )
     return(vds)
+           
+def annotate_mpc(vds):
+    logger.info('Annotate with MPC scores.')
+    kt = (
+        hc.read_table(
+            'gs://exome-qc/resources/missense_constraint/constraint_official/fordist_constraint_official_mpc_values.kt'
+        )
+
+        .key_by('variant')
+
+        .select(
+            [
+                'variant',
+                'ENSG',
+                'gene_name',
+                'SIFT',
+                'PolyPhen',
+                'obs_exp',
+                'mis_badness',
+                'fitted_score',
+                'MPC'
+            ]
+        )
+    )         
+    vds = vds.annotate_variants_table(kt, root = 'va.mpc')
+    return(vds)
+
+def annotate_splice(vds):
+    logger.info('Annotate with splice scores.')
+    kt = (
+        hc.read_table(
+            'gs://exome-qc/resources/splice_region_constraint/splice_constrained_variants.kt'
+        )
     
+        .key_by('region')
+
+        .select(
+            [
+                'region',
+                'chrom',
+                'pos',
+                'ref',
+                'splice_position',
+                'gene_id',
+                'gene_name',
+                'splice_region_damaging'
+            ]
+        )
+    )
+    vds = vds.annotate_variants_table(kt, root = 'va.splice')
+    return(vds)
+           
+def annotate_gnomad_frequencies(vds):
+    logger.info('Annotate with gnomAD frequencies.')
+    gnomad_vds = (
+        hc
+            .read('gs://sczmeta_exomes/data/gnomad_reference/release_v1.1/gnomad_merged.reduced.vep.r2.0.1.nonpsych.sites.vds')
+            .annotate_variants_expr('va = select(va, gnomad)')
+     )
+    vds = vds.annotate_variants_vds(gnomad_vds, expr = 'va = merge(va, vds)')
+    return(vds)
+    
+def annotate_nonpsychexac_frequencies(vds):
+    logger.info('Annotate with non-psych ExAC frequencies.')
+    exac_vds = hc.read('gs://exome-qc/resources/exac_release0.3.1/ExAC.r0.3.nonpsych.sites.vds')
+    vds = vds.annotate_variants_vds(exac_vds, 'va.in_nonpsych_ExAC = vds.in_nonpsych_ExAC')
+    return(vds)
+    
+def annotate_discovEHR_frequencies(vds):
+    logger.info('Annotate with non-psych ExAC frequencies.')
+    discov_vds = hc.read('gs://exome-qc/resources/discovEHR/discovEHR_freeze_50.vds')
+    vds = vds.annotate_variants_vds(discov_vds, 'va.in_discovEHR = vds.in_discovEHR')
+    return(vds)
+
+def annotate_cadd(vds):
+    logger.info('Annotate with CADD scores.')
+    cadd_kt = (
+        hc
+            .read_table('gs://exome-qc/resources/cadd/cadd1.3_whole_exome_SNVs.kt')
+            .key_by('variant')
+            .select([ 'variant', 'phred', 'rawscore'])
+    )
+    vds = vds.annotate_variants_table(cadd_kt, root = 'va.cadd')
+    return(vds)
+
+def annotate_constraint(vds):
+    logger.info('Import missense constrained regions.')
+    mis_regions = (
+        hc
+            .read_table('gs://exome-qc/resources/missense_constraint/constraint_official/missense_constrained_subregions.kt')
+            .key_by('region')
+            .select(
+                [
+                    'region',
+                    'region_name',
+                    'gene_id',
+                    'gene_name',
+                    'obs_exp',
+                    'chisq_diff_null',
+                    'lambda_constrained',
+                    'multiregional',
+                    'mis_z',
+                    'n_regions'
+                ]
+            )
+    )
+    
+    logger.info('Annotate VDS with missense regions.')
+    vds = vds.annotate_variants_table(
+        mis_regions.select(
+            [
+                'region',
+                'gene_id', 
+                'gene_name',
+                'obs_exp',
+                'lambda_constrained'
+            ]
+        ), 
+        root = 'va.constraint'
+    )
+
+    logger.info('Annotate with loss-of-function intolerant genes.')
+    lof_intolerant_genes = set(mis_regions.filter('pLI >= 0.9').query('gene_id.collect().toSet()'))
+    vds = vds.annotate_global('global.lof_intolerant_genes', lof_intolerant_genes, TSet(TString()))
+    
+    logger.info('Annotate with missense intolerant genes.')
+    mis_intolerant_genes = set(mis_regions.filter('mis_z >= 3.09').query('gene_id.collect().toSet()'))
+    vds = vds.annotate_global('global.mis_intolerant_genes', mis_intolerant_genes, TSet(TString()))
+    
+    logger.info('Annotate with genes that contain constrained regions.')
+    regional_intolerant_genes = set(mis_regions.filter('obs_exp <= 0.6').query('gene_id.collect().toSet()'))
+    vds = vds.annotate_global('global.regional_intolerant_genes', regional_intolerant_genes, TSet(TString()))
+
+    return(vds)
