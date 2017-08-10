@@ -373,7 +373,7 @@ def parse_loftee(vds):
 def annotate_mpc(vds):
     logger.info('Annotate with MPC scores.')
     kt = (
-        hc.read_table(
+        vds.hc.read_table(
             'gs://exome-qc/resources/missense_constraint/constraint_official/fordist_constraint_official_mpc_values.kt'
         )
 
@@ -399,7 +399,7 @@ def annotate_mpc(vds):
 def annotate_splice(vds):
     logger.info('Annotate with splice scores.')
     kt = (
-        hc.read_table(
+        vds.hc.read_table(
             'gs://exome-qc/resources/splice_region_constraint/splice_constrained_variants.kt'
         )
     
@@ -424,7 +424,7 @@ def annotate_splice(vds):
 def annotate_gnomad_frequencies(vds):
     logger.info('Annotate with gnomAD frequencies.')
     gnomad_vds = (
-        hc
+        vds.hc
             .read('gs://sczmeta_exomes/data/gnomad_reference/release_v1.1/gnomad_merged.reduced.vep.r2.0.1.nonpsych.sites.vds')
             .annotate_variants_expr('va = select(va, gnomad)')
      )
@@ -433,31 +433,42 @@ def annotate_gnomad_frequencies(vds):
     
 def annotate_nonpsychexac_frequencies(vds):
     logger.info('Annotate with non-psych ExAC frequencies.')
-    exac_vds = hc.read('gs://exome-qc/resources/exac_release0.3.1/ExAC.r0.3.nonpsych.sites.vds')
+    exac_vds = vds.hc.read('gs://exome-qc/resources/exac_release0.3.1/ExAC.r0.3.nonpsych.sites.vds')
     vds = vds.annotate_variants_vds(exac_vds, 'va.in_nonpsych_ExAC = vds.in_nonpsych_ExAC')
     return(vds)
     
 def annotate_discovEHR_frequencies(vds):
     logger.info('Annotate with non-psych ExAC frequencies.')
-    discov_vds = hc.read('gs://exome-qc/resources/discovEHR/discovEHR_freeze_50.vds')
+    discov_vds = vds.hc.read('gs://exome-qc/resources/discovEHR/discovEHR_freeze_50.vds')
     vds = vds.annotate_variants_vds(discov_vds, 'va.in_discovEHR = vds.in_discovEHR')
     return(vds)
 
-def annotate_cadd(vds):
+def annotate_cadd13(vds):
     logger.info('Annotate with CADD scores.')
     cadd_kt = (
-        hc
+        vds.hc
             .read_table('gs://exome-qc/resources/cadd/cadd1.3_whole_exome_SNVs.kt')
             .key_by('variant')
             .select([ 'variant', 'phred', 'rawscore'])
     )
-    vds = vds.annotate_variants_table(cadd_kt, root = 'va.cadd')
+    vds = vds.annotate_variants_table(cadd_kt, root = 'va.cadd13')
+    return(vds)
+
+def annotate_cadd10(vds):
+    logger.info('Annotate with CADD scores.')
+    cadd_kt = (
+        vds.hc
+            .read_table('gs://exome-qc/resources/cadd/cadd1.0_whole_exome_SNVs.kt')
+            .key_by('variant')
+            .select([ 'variant', 'phred', 'rawscore'])
+    )
+    vds = vds.annotate_variants_table(cadd_kt, root = 'va.cadd10')
     return(vds)
 
 def annotate_constraint(vds):
     logger.info('Import missense constrained regions.')
     mis_regions = (
-        hc
+        vds.hc
             .read_table('gs://exome-qc/resources/missense_constraint/constraint_official/missense_constrained_subregions.kt')
             .key_by('region')
             .select(
