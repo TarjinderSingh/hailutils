@@ -7,17 +7,16 @@ import logging
 from pprint import pprint
 from hail import *
 
-
-
-
 def extract_region(vds, locus, start = None, end = None):
     interval_str = ''
     if locus and not start and not end:
         interval_str = '{}'.format(str(locus))
     if locus and start and end:
         interval_str = '{}:{}-{}'.format(locus, str(start), str(end))
+    if locus and start and not end:
+        interval_str = '{}:{}-{}'.format(locus, str(start), str(start + 1))
     return(vds.filter_intervals(Interval.parse(interval_str)))
-
+    
 def extract_region_file(vds, region_file, keep = True, 
                         bed = False, interval_list = False, locus = False, variant = False,
                         header = None):
@@ -38,6 +37,13 @@ def extract_region_file(vds, region_file, keep = True,
         kt = kt.key_by(kt.columns[0])
     return(vds.filter_variants_table(kt, keep = keep))
     
+def extract_variants(vds, variant_str_list):
+    variant_str_list = [ variant_str_list ] if isinstance(variant_str_list, str) else variant_str_list
+    return(vds.filter_variants_list([ Variant.parse(vstr) for vstr in variant_str_list ], keep = True))
+
+def extract_genotypes(vds):
+    return
+
 def sites(vds):
     return(vds.drop_samples())
 
