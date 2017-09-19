@@ -44,3 +44,7 @@ def write_list(outfile, l):
     with hadoop_write(outfile) as f:
         writer = csv.writer(f, delimiter = '\n')
         writer.writerow(l)
+        
+def glob(path):
+    lines = execute([ 'hadoop', 'fs', '-ls', path ], return_out = True, silent = True)
+    return([ line.strip().split()[-1] for line in lines[1:] ])
