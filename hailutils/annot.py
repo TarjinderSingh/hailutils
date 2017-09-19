@@ -529,12 +529,29 @@ def annotate_nonpsych_lof_intolerant_genes(vds):
             .annotate_global('global.lof_intolerant_genes', gene_set, TSet(TString()))
             .annotate_variants_expr(
                 '''
-                va.in_lof_intolerant_gene = 
+                va.genesets.in_lof_intolerant_genes = 
                     if (! va.gene_id.filter(x => global.lof_intolerant_genes.contains(x)).isEmpty())
                         true
                     else
                         false
                 '''
             )
+    )
+    return(vds)
+
+def annotate_geneset(vds, name, geneset = None):
+    if isinstance(geneset, set):
+        vds = vds.annotate_global('global.{}'.format(name), gene_set, TSet(TString()))
+    vds = (
+        vds
+            .annotate_variants_expr(
+                '''
+                va.genesets.in_{0} = 
+                    if (! va.gene_id.filter(x => global.{0}.contains(x)).isEmpty())
+                        true
+                    else
+                        false
+                '''.format(name)
+        )
     )
     return(vds)
