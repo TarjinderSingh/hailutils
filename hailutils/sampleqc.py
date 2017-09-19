@@ -104,7 +104,7 @@ def pc_project(vds, pc_vds, pca_loadings_root = 'va.pca_loadings'):
 
 def autopca(vds, sample_ids, k = 20, **kwargs):
     return(
-        subset_and_ld_prune(vds, ids, **kwargs)
+        subset_and_ld_prune(vds, sample_ids, **kwargs)
             .pca(scores = 'sa.scores', loadings = 'va.pca_loadings', k = k)
     )
         
