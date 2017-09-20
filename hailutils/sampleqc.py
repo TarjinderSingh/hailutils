@@ -11,10 +11,14 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+os.environ['CLOUD'] = 'dataproc'
 
 def ld_prune(vds, r2 = 0.1, window = 1000000, memory_per_core = 512, num_cores = 90):    
     logger.info('Exclude variants in high LD regions.')
-    kt = KeyTable.import_interval_list('/user/tsingh/resources/price_2010-high_ld_regions.tsv')
+    kt = KeyTable.import_interval_list(
+        '/user/tsingh/resources/price_2010-high_ld_regions.tsv' 
+        if os.environ['CLOUD'] == 'local' else 'gs://exome-qc/resources/high-ld-regions/price_2010-high_ld_regions.tsv'
+    )
     vds = vds.filter_variants_table(kt, keep = False)
     logger.info('After excluding high LD regions, %s samples and %s variants observed.', *vds.count())
     logger.info('Begin LD pruning.')
@@ -22,30 +26,30 @@ def ld_prune(vds, r2 = 0.1, window = 1000000, memory_per_core = 512, num_cores =
     logger.info('After LD pruning, %s samples and %s variants observed.', *vds.count())  
     return(vds)
 
-def subset_and_ld_prune(
-    vds, sample_ids, 
+def filter_and_ld_prune(
+    vds, sample_ids = None, 
     pHWE_threshold = 1e-05, callrate_threshold = 0.99,
     af_threshold = 0.05, meandp_threshold = 7,
     **kwargs
 ):
-    logger.info('Filter to %s samples, and run sample and variant QC.', len(sample_ids))
-    vds = (
-        vds
-            .filter_samples_list(sample_ids, keep = True)
-            .sample_qc('sa.hcqc')
-            .variant_qc('va.hcqc')
-    )
+    if sample_ids:
+        logger.info('Filter to %s samples.', len(sample_ids))  
+        vds = vds.filter_samples_list(sample_ids, keep = True)
+
+    logger.info('Run sample and variant QC.')
+    vds = vds.sample_qc('sa.rqc').variant_qc('va.rqc')
+
     logger.info(
         'Restrict analysis to variants with: pHWE >= %s, callRate >= %s, AF >= %s, dpMean >= %s.',
-        pHWE_threshold, callrate_threshold, af_threshold, meandp_threshold
-    ) 
+        pHWE_threshold, callrate_threshold, af_threshold, meandp_threshold) 
+
     vds = (
         vds.filter_variants_expr(
             '''
             v.altAllele.isSNP() &&
-            va.hcqc.pHWE >= {} && 
-            va.hcqc.callRate >= {} && 
-            va.hcqc.AF >= {} && 
+            va.rqc.pHWE >= {} && 
+            va.rqc.callRate >= {} && 
+            va.rqc.AF >= {} && 
             va.qc.dpMean >= {}
             '''.format(pHWE_threshold, callrate_threshold, af_threshold, meandp_threshold)
         )
@@ -60,7 +64,7 @@ def pc_relate_subset(
     k = 5, maf = 0.05, block_size = 1024,
     **kwargs
 ):
-    vds = subset_and_ld_prune(vds, sample_ids, **kwargs)
+    vds = filter_and_ld_prune(vds, sample_ids, **kwargs)
     logger.info(
         'Run PC-Relate with the following parameters: k = %s, maf = %s, and blocksize = %s.', 
         k, maf, block_size)
@@ -102,9 +106,9 @@ def pc_project(vds, pc_vds, pca_loadings_root = 'va.pca_loadings'):
            .annotate_samples_expr('sa.pca = {%s}' % arr_to_struct_expr)
     )
 
-def autopca(vds, sample_ids, k = 20, **kwargs):
+def autopca(vds, sample_ids = None, k = 20, **kwargs):
     return(
-        subset_and_ld_prune(vds, sample_ids, **kwargs)
+        filter_and_ld_prune(vds, sample_ids, **kwargs)
             .pca(scores = 'sa.scores', loadings = 'va.pca_loadings', k = k)
     )
         
