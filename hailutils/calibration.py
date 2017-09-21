@@ -85,7 +85,7 @@ def allele_metrics_exprs(root = "va.metrics", sample_filt_expr = ""):
     sample_filt_expr = "&& " + sample_filt_expr if sample_filt_expr else ""
     exprs = [
         '{}.nSample = gs.filter(g => true {}).count()',
-        '{}.nCalled = gs.filter(g => g.isCalled() {}).count(),
+        '{}.nCalled = gs.filter(g => g.isCalled() {}).count()',
         '{}.AC = gs.filter(g => g.isCalled() {}).map(g => g.nNonRefAlleles()).sum()',
         '{}.homrefGQ = gs.filter(g => g.isHomRef() {}).map(g => g.gq).stats()',
         '{}.hetGQ = gs.filter(g => g.isHet() {}).map(g => g.gq).stats()',
