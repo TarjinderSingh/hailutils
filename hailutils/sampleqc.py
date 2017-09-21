@@ -111,4 +111,3 @@ def autopca(vds, sample_ids = None, k = 20, **kwargs):
         filter_and_ld_prune(vds, sample_ids, **kwargs)
             .pca(scores = 'sa.scores', loadings = 'va.pca_loadings', k = k)
     )
-        

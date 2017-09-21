@@ -555,3 +555,19 @@ def annotate_geneset(vds, name, geneset = None):
         )
     )
     return(vds)
+
+def get_gencode_keytable():
+    return(KeyTable.import_bed('gs://exome-qc/resources/gencode_v19/gencode.v19.cds.merged_by_exonid.merged.bed'))
+
+def get_gencode8_keytable():
+    return(KeyTable.import_bed('gs://exome-qc/resources/gencode_v19/gencode.v19.cds.merged_by_exonid.merged_p8.bed'))
+
+def get_mask_keytable():
+    return(
+        KeyTable.import_bed('gs://sczmeta_exomes/data/coverage/high_confidence_regions_gencode_annotated_10x80_20170910.bed')
+    )
+
+def get_maskext_keytable():
+    return(
+        KeyTable.import_bed('gs://sczmeta_exomes/data/coverage/high_confidence_regions_extended_10x80_20170910.bed')
+    )
