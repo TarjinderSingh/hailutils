@@ -82,32 +82,6 @@ def site_feature_exprs(root = "va.features"):
     ]
     return([ x.format(root) for x in exprs ])
 
-def allele_metrics_exprs(root = "va.metrics", sample_filt_expr = ""):
-    sample_filt_expr = "&& " + sample_filt_expr if sample_filt_expr else ""
-    exprs = [
-        '{}.nSample = gs.filter(g => true {}).count()',
-        '{}.nCalled = gs.filter(g => g.isCalled() {}).count()',
-        '{}.AC = gs.filter(g => g.isCalled() {}).map(g => g.nNonRefAlleles()).sum()',
-        '{}.homrefGQ = gs.filter(g => g.isHomRef() {}).map(g => g.gq).stats()',
-        '{}.hetGQ = gs.filter(g => g.isHet() {}).map(g => g.gq).stats()',
-        '{}.homvarGQ = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
-        '{}.homrefDP = gs.filter(g => g.isHomRef() {}).map(g => g.dp).stats()',
-        '{}.hetDP = gs.filter(g => g.isHet() {}).map(g => g.dp).stats()',
-        '{}.homvarDP = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
-        '{}.homrefAB = gs.filter(g => g.isHomRef() {}).map(g => g.ad[1]/g.dp).stats()',
-        '{}.hetAB = gs.filter(g => g.isHet() {}).map(g => g.ad[1]/g.dp).stats()',
-        '{}.homvarAB = gs.filter(g => g.isHomVar() {}).map(g => g.ad[1]/g.dp).stats()'
-    ]
-    return([ x.format(root, sample_filt_expr) for x in exprs ])
-
-def allele_metrics_exprs2(root = "va.metrics", sample_filt_expr = ""):
-    sample_filt_expr = "&& " + sample_filt_expr if sample_filt_expr else ""
-    exprs = [
-        '{0}.callRate = {0}.nCalled/{0}.nSample',
-        '{0}.AN = {0}.nCalled * 2'
-    ]
-    return([ x.format(root, sample_filt_expr) for x in exprs ])
-
 def hard_filter_exprs(root = 'va.prior'):
     logger.info('Identify low-quality sites based on GATK hard filters.')
     return([ 
