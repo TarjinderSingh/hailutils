@@ -47,5 +47,9 @@ def extract_genotypes(vds):
 def sites(vds):
     return(vds.drop_samples())
 
+def subset_for_testing(vds, region = '22:15M-20M'):
+    return(extract_region(vds, region))
+    
+
 def extract_inds(vds, keep = True):
     return

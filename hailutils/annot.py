@@ -564,10 +564,18 @@ def get_gencode8_keytable():
 
 def get_mask_keytable():
     return(
-        KeyTable.import_bed('gs://sczmeta_exomes/data/coverage/high_confidence_regions_gencode_annotated_10x80_20170910.bed')
+        KeyTable.import_bed(
+            'gs://sczmeta_exomes/data/coverage/release_v1.5/high_confidence_regions_gencode_annotated_10x80_20170910.bed')
     )
 
 def get_maskext_keytable():
     return(
-        KeyTable.import_bed('gs://sczmeta_exomes/data/coverage/high_confidence_regions_extended_10x80_20170910.bed')
+        KeyTable.import_bed(
+            'gs://sczmeta_exomes/data/coverage/release_v1.5/high_confidence_regions_extended_10x80_20170910.bed')
     )
+
+def get_exome_called_keytable():
+    return(
+        KeyTable.import_bed('gs://sczmeta_exomes/data/regions/exome_calling_regions.merged.v1.bed')
+    )
+    
