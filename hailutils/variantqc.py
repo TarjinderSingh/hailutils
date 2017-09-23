@@ -63,5 +63,5 @@ def genotype_filter_expr(
         )
         '''.format(minDP = minDP, homrefAB = homrefAB, minhetAB = minhetAB, 
                    minhomrefGQ = minhomrefGQ, minSNPGQ = minSNPGQ, minindelGQ = minindelGQ)
-    logger.info('We use the following expression to filter genotypes: %s', expr)
+    logger.info('The following expression is used to filter genotypes: %s', expr)
     return(expr)
