@@ -141,12 +141,26 @@ def run_vep_pipeline(vds):
     logger.info('Parsing VEP output.')
     vds = (
         parse_loftee(
-            parse_vep(
+            parse_vep_transcript_consequences(
                 annotate_vep_global(vds)
             )
          )
     )
     return(vds)
+    
+def run_vep_pipeline2(vds):
+    logger.info('Annotating with VEP.')
+    vds = vds.vep(config = '/vep/vep-gcloud.properties')
+
+    logger.info('Parsing VEP output.')
+    vds = (
+        parse_canonical_transcript_consequences(
+            parse_vep_transcript_consequences(
+                annotate_vep_global(vds)
+            )
+         )
+    )
+    return(vds) 
     
 def annotate_vep_global(vds):  
     ####
@@ -369,7 +383,168 @@ def parse_loftee(vds):
             )
     )
     return(vds)
-           
+
+def parse_vep_transcript_consequences(vds):
+    logger.info('Parse VEP transcript consequences.')
+    return(
+        vds
+            .annotate_variants_expr(
+                """
+                va.tcsq = 
+                    va.vep.transcript_consequences
+                        .filter(tc => tc.biotype == "protein_coding") 
+                        .map(
+                            x => {
+                                transcript_id: x.transcript_id,
+                                canonical: x.canonical == 1,
+                                consequence_term: x.consequence_terms.mkString(","),
+                                minscore: x.consequence_terms.map(x => global.somap[x]).min(),
+                                csq: let minscore = x.consequence_terms.map(x => global.somap[x]).min() in 
+                                    if ((minscore <= 5) && (minscore != 3))
+                                        "lof"
+                                    else if (minscore == 3)
+                                        "startlost"
+                                    else if (minscore == 6)
+                                        "stoplost"
+                                    else if (minscore == 8 || minscore == 9)
+                                        "ns"
+                                    else if (minscore == 10)
+                                        "mis"
+                                    else if (minscore == 12)
+                                        "splice"
+                                    else if (minscore == 15)
+                                        "syn"
+                                    else
+                                        NA: String,
+                                gene_id: x.gene_id,
+                                aachange: x.hgvsp,
+                                lof: x.lof,
+                                lof_filter: x.lof_filter,
+                                lof_flags: x.lof_flags,
+                                polyphen: x.polyphen_prediction,
+                                sift: x.sift_prediction,
+                                loftee: 
+                                    if ((x.lof == "HC") && (x.lof_flags == ""))
+                                        "HC"
+                                    else if ((x.lof == "HC") && (x.lof_flags != ""))
+                                        "HCflagged"
+                                    else if (x.lof == "LC")
+                                        "LC"
+                                    else 
+                                        NA: String
+                            }
+                        )
+                """
+            )
+    )
+
+def parse_canonical_transcript_consequences(vds):
+    logger.info(
+        'Determine minscores of canonical transcripts and all coding transcripts '
+        'and identify all corresponding transcripts with those minscore values.'
+    )
+               
+    vds = (
+        vds
+            .annotate_variants_expr(
+                '''
+                va.ann.canonical.minscore = va.tcsq.filter(tc => tc.canonical).map(tc => tc.minscore).min(),
+                va.ann.all.minscore = va.tcsq.map(tc => tc.minscore).min()
+                '''
+            )
+            .annotate_variants_expr(
+                '''
+                va.ann.canonical.min_tcsq = va.tcsq.filter(tc => tc.canonical && tc.minscore == va.ann.canonical.minscore),
+                va.ann.all.min_tcsq = va.tcsq.filter(tc => tc.minscore == va.ann.all.minscore)
+                '''
+            )
+    )
+    
+    logger.info('Annotate the genes and predicted consequences of all minscore transcripts.')
+    exprs = [
+        '''
+        {0}.gene_id = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.gene_id).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
+        {0}.csq = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.csq).toSet().head()
+            else
+                NA: String
+        ''',
+        '''
+        {0}.loftee = 
+            if (isDefined({0}.minscore))
+                let loftee = {0}.min_tcsq.map(tc => tc.loftee).toSet() in
+                if (loftee.contains("HC"))
+                    "HC"
+                else if (loftee.contains("HCflagged"))
+                    "HCflagged"
+                else if (loftee.contains("LC"))
+                    "LC"
+                else 
+                    NA: String
+            else
+                NA: String
+        ''',
+        '''
+        {0}.polyphen = 
+            if (isDefined({0}.minscore))
+                let loftee = {0}.min_tcsq.map(tc => tc.polyphen).toSet() in
+                if (loftee.contains("probably_damaging"))
+                    "D"
+                else if (loftee.contains("possibly_damaging"))
+                    "P"
+                else if (loftee.contains("benign"))
+                    "B"
+                else 
+                    NA: String
+            else
+                NA: String
+        '''
+    ] 
+    vds = vds.annotate_variants_expr(
+        [ expr.format(ann) for expr in exprs for ann in [ 'va.ann.canonical', 'va.ann.all' ] ]
+    )
+    
+    logger.info('Annotate variant with all transcripts with lowest minscore values.')
+    vds = vds.annotate_variants_expr(
+        '''
+        va.ann.all.transcript_ids = 
+            let gene2transcripts_structlist = 
+                va.ann.all.gene_id.toArray()
+                    .map(
+                        x => {
+                            gene_id: x, 
+                            transcript_ids: va.ann.all.min_tcsq
+                                .filter(tc => tc.gene_id == x)
+                                .map(tc => tc.transcript_id)
+                                .toSet()
+                                .toArray()
+                             }
+                    ) in 
+                index(gene2transcripts_structlist, gene_id)
+                    .mapValues(x => x.transcript_ids)
+        '''
+    )
+    return(vds)
+
+def get_transcript_consequence_table(vds, columns = [ 'v', 'va.tcsq' ]):
+    return(
+        vds
+            .variants_table()
+            .flatten()
+            .select(columns)
+            .explode('va.tcsq')
+            .annotate('v = str(v)')
+            .flatten()
+            .to_pandas()
+    )
+
 def annotate_mpc(vds):
     logger.info('Annotate with MPC scores.')
     kt = (
@@ -578,4 +753,7 @@ def get_exome_called_keytable():
     return(
         KeyTable.import_bed('gs://sczmeta_exomes/data/regions/exome_calling_regions.merged.v1.bed')
     )
+    
+
+
     
