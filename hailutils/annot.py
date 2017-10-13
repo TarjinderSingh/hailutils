@@ -533,6 +533,86 @@ def parse_canonical_transcript_consequences(vds):
     )
     return(vds)
 
+def parse_selected_transcript_consequences(vds, transcript_ids, name):
+    logger.info(
+        'Determine minscores of selected transcripts '
+        'and identify all corresponding transcripts with those values.'
+    )
+    
+    vds = vds.annotate_global('global.{}_transcript_ids'.format(name), transcript_ids, TSet(TString()))
+    
+    vds = (
+        vds
+            .annotate_variants_expr(
+                '''
+                va.ann.{0}.minscore = 
+                    va.tcsq
+                        .filter(tc => global.{0}_transcript_ids.contains(tc.transcript_id))
+                        .map(tc => tc.minscore)
+                        .min()
+                '''.format(name)
+            )
+            .annotate_variants_expr(
+                '''
+                va.ann.{0}.min_tcsq = 
+                    va.tcsq.filter(
+                        tc => global.{0}_transcript_ids.contains(tc.transcript_id) && 
+                        tc.minscore == va.ann.{0}.minscore
+                    )
+                '''.format(name)
+            )
+    )
+    
+    logger.info('Annotate the genes and predicted consequences of all minscore transcripts.')
+    exprs = [
+        '''
+        {0}.gene_id = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.gene_id).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
+        {0}.csq = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.csq).toSet().head()
+            else
+                NA: String
+        ''',
+        '''
+        {0}.loftee = 
+            if (isDefined({0}.minscore))
+                let loftee = {0}.min_tcsq.map(tc => tc.loftee).toSet() in
+                if (loftee.contains("HC"))
+                    "HC"
+                else if (loftee.contains("HCflagged"))
+                    "HCflagged"
+                else if (loftee.contains("LC"))
+                    "LC"
+                else 
+                    NA: String
+            else
+                NA: String
+        ''',
+        '''
+        {0}.polyphen = 
+            if (isDefined({0}.minscore))
+                let loftee = {0}.min_tcsq.map(tc => tc.polyphen).toSet() in
+                if (loftee.contains("probably_damaging"))
+                    "D"
+                else if (loftee.contains("possibly_damaging"))
+                    "P"
+                else if (loftee.contains("benign"))
+                    "B"
+                else 
+                    NA: String
+            else
+                NA: String
+        '''
+    ] 
+    vds = vds.annotate_variants_expr([ expr.format('va.ann.{}'.format(name)) for expr in exprs  ])
+    return(vds)
+
 def get_transcript_consequence_table(vds, columns = [ 'v', 'va.tcsq' ]):
     return(
         vds
@@ -753,7 +833,3 @@ def get_exome_called_keytable():
     return(
         KeyTable.import_bed('gs://sczmeta_exomes/data/regions/exome_calling_regions.merged.v1.bed')
     )
-    
-
-
-    
