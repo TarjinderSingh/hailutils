@@ -50,6 +50,10 @@ def sites(vds):
 def subset_for_testing(vds, region = '22:15M-20M'):
     return(extract_region(vds, region))
     
-
-def extract_inds(vds, keep = True):
-    return
+def extract_inds(vds, sample_ids, keep = True):
+    vds = vds.annotate_global('global.sample_ids', sample_ids, TSet(TString()))
+    if keep:
+        vds = vds.filter_samples_expr('global.sample_ids.contains(s)')
+    else:
+        vds = vds.filter_samples_expr('! global.sample_ids.contains(s)')
+    return(vds)
