@@ -6,6 +6,7 @@ import re
 import logging
 from pprint import pprint
 from hail import *
+import subprocess
 
 def extract_region(vds, locus, start = None, end = None):
     interval_str = ''
