@@ -57,3 +57,9 @@ def extract_inds(vds, sample_ids, keep = True):
     else:
         vds = vds.filter_samples_expr('! global.sample_ids.contains(s)')
     return(vds)
+
+def change_contig(outfile, infile, add = True):
+    cmd = 'zless {} | modify_vcf_contig.py'.format(infile)
+    cmd += ' -a' if add else ' -r'
+    cmd += ' | bgzip -c > {}'.format(outfile)
+    subprocess.call(cmd, shell = True)
