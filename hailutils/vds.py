@@ -8,6 +8,8 @@ from pprint import pprint
 from hail import *
 import subprocess
 
+from pycore import *
+
 def extract_region(vds, locus, start = None, end = None):
     interval_str = ''
     if locus and not start and not end:
@@ -59,8 +61,43 @@ def extract_inds(vds, sample_ids, keep = True):
         vds = vds.filter_samples_expr('! global.sample_ids.contains(s)')
     return(vds)
 
+def __change_contig(outfile, infile, add = True):
+    f = open(outfile, 'w')
+    p1 = subprocess.Popen([ 'zless', infile ], stdout = subprocess.PIPE, bufsize = 0)
+    opt = '-a' if add else '-r'
+    p2 = subprocess.Popen([ 'modify_vcf_contig.py', opt ], stdin = p1.stdout, stdout = subprocess.PIPE, bufsize = 0)
+    p1.stdout.close()
+    p3 = subprocess.Popen([ 'bgzip', '-c' ], stdin = p2.stdout, stdout = f, bufsize = 0)
+    p2.stdout.close()
+
+    output = p3.communicate()[0]
+    print(output)
+
+    #cmd = 'modify_vcf_contig.py'.format(infile)
+    #cmd += ' -a' if add else ' -r'
+    #cmd += ' | bgzip -c > {}'.format(outfile)
+    #execute(cmd, silent = True, shell = True)
+
 def change_contig(outfile, infile, add = True):
-    cmd = 'zless {} | modify_vcf_contig.py'.format(infile)
-    cmd += ' -a' if add else ' -r'
-    cmd += ' | bgzip -c > {}'.format(outfile)
-    subprocess.call(cmd, shell = True)
+    make_dir(outfile)
+    outroot = change_ext(outfile, '', '.vcf.gz')
+    f = gzip.open(infile, 'rb')
+    g = open("{0}.vcf.part".format(outroot), 'w')
+    if add:
+        for line in f:
+            line = line.decode()
+            if line[0:1] == "#":
+                g.write(line)
+            else:
+                g.write('chr' + line)
+    else:
+        for line in f:
+            line = line.decode()
+            if line[0:1] == "#":
+                g.write(line)
+            else:
+                g.write(line[3:])
+    f.close()
+    g.close()
+    rename("{0}.vcf".format(outroot))
+    unix_cmd("bgzip -f {0}.vcf".format(outroot))
