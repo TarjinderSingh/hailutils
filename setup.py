@@ -9,5 +9,5 @@ setup(
     author='Tarjinder Singh',
     author_email='tsingh@broadinstitute.org',
     url='https://github.com/TarjinderSingh/hailutils/',
-    scripts=['bin/modify_vcf_contig.py', 'bin/bgzip', 'bin/tabix']
+    scripts=['bin/modify_vcf_contig.py']
 )
