@@ -470,6 +470,13 @@ def parse_canonical_transcript_consequences(vds):
                 NA: Set[String]
         ''',
         '''
+        {0}.transcript_id = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.transcript_id).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
         {0}.csq = 
             if (isDefined({0}.minscore))
                 {0}.min_tcsq.map(tc => tc.csq).toSet().head()
@@ -505,6 +512,13 @@ def parse_canonical_transcript_consequences(vds):
                     NA: String
             else
                 NA: String
+        ''',
+        '''
+        {0}.aachange = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.aachange).toSet()
+            else
+                NA: Set[String]
         '''
     ] 
     vds = vds.annotate_variants_expr(
@@ -573,6 +587,13 @@ def parse_selected_transcript_consequences(vds, transcript_ids, name):
                 NA: Set[String]
         ''',
         '''
+        {0}.transcript_id = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.transcript_id).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
         {0}.csq = 
             if (isDefined({0}.minscore))
                 {0}.min_tcsq.map(tc => tc.csq).toSet().head()
@@ -608,6 +629,13 @@ def parse_selected_transcript_consequences(vds, transcript_ids, name):
                     NA: String
             else
                 NA: String
+        ''',
+        '''
+        {0}.aachange = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.aachange).toSet()
+            else
+                NA: Set[String]
         '''
     ] 
     vds = vds.annotate_variants_expr([ expr.format('va.ann.{}'.format(name)) for expr in exprs  ])
