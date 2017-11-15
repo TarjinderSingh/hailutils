@@ -111,3 +111,59 @@ def autopca(vds, sample_ids = None, k = 20, **kwargs):
         filter_and_ld_prune(vds, sample_ids, **kwargs)
             .pca(scores = 'sa.scores', loadings = 'va.pca_loadings', k = k)
     )
+
+def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = None):
+    if min_k:
+        logger.info('Retain only pairwise relationships with kin >= %s', min_k)
+        kinship_kt = kinship_kt.filter("kin >= {}".format(min_k))
+    
+    logger.info('Define pairwise samples as sets.')
+    related_samples = kinship_kt.query('i.flatMap(i => [i,j]).collectAsSet()')
+
+    if (tiebreak_expr == 'case'):
+        ann = 'isCase: `sa.isCase`'
+        tiebreak_expr = '''
+            if (l.isCase && !r.isCase) 
+                -1
+            else if (!l.isCase && r.isCase) 
+                1 
+            else 
+                0
+            '''
+    elif (tiebreak_expr == 'score'):
+        ann = 'isCase: `sa.isCase`, score: `sa.score`'
+        tiebreak_expr = '''
+            if (l.isCase && !r.isCase) 
+                -1
+            else if (!l.isCase && r.isCase) 
+                1 
+            else if (l.score > r.score)
+                -1
+            else if (l.score < r.score)
+                1
+            else
+                0
+            '''
+    
+    logger.info('Identify maximum independent set of samples.')
+    if (tiebreak_expr):
+        related_samples_to_keep = (
+            kinship_kt
+                .key_by("i")
+                .join(sample_kt)
+                .annotate('iAndCase = { id: i, %s }' % ann)
+                .select(['j', 'iAndCase'])
+                .key_by("j")
+                .join(sample_kt)
+                .annotate('jAndCase = { id: j, %s }' % ann)
+                .select(['iAndCase', 'jAndCase'])
+                .maximal_independent_set(
+                    "iAndCase", 
+                    "jAndCase",
+                    tie_breaker = tiebreak_expr
+                )
+        )
+    else:
+        related_samples_to_keep = related_pairs.maximal_independent_set("i", "j")
+    related_samples_to_remove = related_samples - set(related_samples_to_keep)
+    return(related_samples_to_remove)
