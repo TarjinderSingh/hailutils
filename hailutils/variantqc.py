@@ -11,22 +11,27 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def allele_metrics_exprs(root = "va.metrics", sample_filt_expr = ""):
+def allele_metrics_exprs(root = "va.metrics", sample_filt_expr = "", hardcall = False):
     sample_filt_expr = "&& " + sample_filt_expr if sample_filt_expr else ""
     exprs = [
         '{}.nSample = gs.filter(g => true {}).count()',
         '{}.nCalled = gs.filter(g => g.isCalled() {}).count()',
-        '{}.AC = gs.filter(g => g.isCalled() {}).map(g => g.nNonRefAlleles()).sum()',
-        '{}.homrefGQ = gs.filter(g => g.isHomRef() {}).map(g => g.gq).stats()',
-        '{}.hetGQ = gs.filter(g => g.isHet() {}).map(g => g.gq).stats()',
-        '{}.homvarGQ = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
-        '{}.homrefDP = gs.filter(g => g.isHomRef() {}).map(g => g.dp).stats()',
-        '{}.hetDP = gs.filter(g => g.isHet() {}).map(g => g.dp).stats()',
-        '{}.homvarDP = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
-        '{}.homrefAB = gs.filter(g => g.isHomRef() {}).map(g => g.ad[1]/g.dp).stats()',
-        '{}.hetAB = gs.filter(g => g.isHet() {}).map(g => g.ad[1]/g.dp).stats()',
-        '{}.homvarAB = gs.filter(g => g.isHomVar() {}).map(g => g.ad[1]/g.dp).stats()'
+        '{}.AC = gs.filter(g => g.isCalled() {}).map(g => g.nNonRefAlleles()).sum()'
     ]
+    if not hardcall:
+        exprs.extend(
+            [
+                '{}.homrefGQ = gs.filter(g => g.isHomRef() {}).map(g => g.gq).stats()',
+                '{}.hetGQ = gs.filter(g => g.isHet() {}).map(g => g.gq).stats()',
+                '{}.homvarGQ = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
+                '{}.homrefDP = gs.filter(g => g.isHomRef() {}).map(g => g.dp).stats()',
+                '{}.hetDP = gs.filter(g => g.isHet() {}).map(g => g.dp).stats()',
+                '{}.homvarDP = gs.filter(g => g.isHomVar() {}).map(g => g.dp).stats()',
+                '{}.homrefAB = gs.filter(g => g.isHomRef() {}).map(g => g.ad[1]/g.dp).stats()',
+                '{}.hetAB = gs.filter(g => g.isHet() {}).map(g => g.ad[1]/g.dp).stats()',
+                '{}.homvarAB = gs.filter(g => g.isHomVar() {}).map(g => g.ad[1]/g.dp).stats()'
+            ]
+        )
     return([ x.format(root, sample_filt_expr) for x in exprs ])
 
 def allele_metrics_exprs2(root = "va.metrics", sample_filt_expr = ""):
@@ -64,4 +69,32 @@ def genotype_filter_expr(
         '''.format(minDP = minDP, homrefAB = homrefAB, minhetAB = minhetAB, 
                    minhomrefGQ = minhomrefGQ, minSNPGQ = minSNPGQ, minindelGQ = minindelGQ)
     logger.info('The following expression is used to filter genotypes: %s', expr)
+    return(expr)
+
+def variant_filter_expr(
+    min_gqmean = 20, 
+    min_dpmean = 10, 
+    pre_pHWE = 1e-6, 
+    post_pHWE = 1e-6, 
+    min_hetAB = 0.3, 
+    post_callrate = 0.97, 
+    min_AC = 0,
+    empty_filters = True
+):
+    expr_list = [
+        'va.prefilt.vqc.gqMean >= {}'.format(min_gqmean),
+        'va.prefilt.vqc.dpMean >= {}'.format(min_dpmean),
+        'va.prefilt.hetAB.mean >= {}'.format(min_hetAB),           
+        'va.prefilt.hetAB.mean <= {}'.format(1 - min_hetAB),
+        'va.prefilt.vqc.pHWE >= {}'.format(pre_pHWE),
+        'va.postfilt.vqc.pHWE >= 1e-6'.format(post_pHWE),
+        'va.postfilt.callRate >= {}'.format(post_callrate),
+        'va.postfilt.AC >= {}'.format(min_AC)
+    ]
+
+    if empty_filters:
+        expr_list.append('va.filters.isEmpty()')
+
+    expr = ' && '.join(expr_list)
+    logger.info('The following expression is used to filter variants: %s', expr)
     return(expr)

@@ -9,5 +9,7 @@ setup(
     author='Tarjinder Singh',
     author_email='tsingh@broadinstitute.org',
     url='https://github.com/TarjinderSingh/hailutils/',
+    packages=['hailutils'],
+    zip_safe=False
     #scripts=['bin/modify_vcf_contig.py']
 )

@@ -8,6 +8,10 @@ import itertools
 from hail import *
 from pprint import pprint
 
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 def join_lists(*args):
     return(list(itertools.chain(*args)))
 

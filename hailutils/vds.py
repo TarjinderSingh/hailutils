@@ -12,6 +12,16 @@ try:
 except:
     from submit import *
 
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+    
+def log_summary(vds):
+    logger.info('%s samples and %s variants are observed in the data set', *list(vds.count()))
+    
+def log_variant_count(vds):
+    logger.info('%s variants are observed in the data set.', vds.count_variants())
+    
 def extract_region(vds, locus, start = None, end = None):
     interval_str = ''
     if locus and not start and not end:
