@@ -27,7 +27,7 @@ def log_sex_count(vds):
         vds.query_samples('samples.map(s => ! sa.pheno.isFemale).map(x => x.toInt()).sum()')
     )
 
-def run_single_variant_basic_tests(vds, test = 'fisher', minCellCount = 5):
+def exact_keytable(vds, test = 'fisher', minCellCount = 5):
     logger.info('Annotate variants with counts.')
     vds = vds.annotate_variants_expr(
         [
@@ -47,8 +47,12 @@ def run_single_variant_basic_tests(vds, test = 'fisher', minCellCount = 5):
         exprs.append('va.exact.fet = fet(va.exact.Xcase, va.exact.Xctrl, va.exact.Xrcase, va.exact.Xrctrl)')
     if test == 'ctt' or test == 'both':
         exprs.append('va.exact.ctt = ctt(va.exact.Xcase, va.exact.Xctrl, va.exact.Xrcase, va.exact.Xrctrl, {})'.format(minCellCount))
-    vds = vds.annotate_variants_expr(exprs)
-    return(vds)
+    return(
+        vds
+            .annotate_variants_expr(exprs)
+            .annotate_variants_expr('va = select(va, exact)')
+            .variants_table()
+    )
 
 def pc_list(n, root = 'sa.covar'):
     return(['{}.PC{}'.format(root, i) for i in range(1, n + 1)])
@@ -72,10 +76,7 @@ def logreg_keytable(
             )
             .annotate_variants_expr('va = select(va, {})'.format(re.sub('va\.', '', root)))
             .variants_table()
-            .flatten()
     )
-    kt = kt.rename(prettify_columns(kt.columns, strip_match = ['va']))
-    kt = unflatten(kt, starts_with = re.sub('va\.', '', root))
     return(kt)
 
 def firth_keytable(vds, method = 'firth', root = 'va.firth', *args, **kwargs):
