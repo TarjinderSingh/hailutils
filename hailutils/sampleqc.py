@@ -119,7 +119,7 @@ def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = No
     
     logger.info('Define pairwise samples as sets.')
     related_samples = kinship_kt.query('i.flatMap(i => [i,j]).collectAsSet()')
-
+    
     if (tiebreak_expr == 'case'):
         ann = 'isCase: `sa.isCase`'
         tiebreak_expr = '''
@@ -147,6 +147,7 @@ def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = No
     
     logger.info('Identify maximum independent set of samples.')
     if (tiebreak_expr):
+        logger.info('Tiebreak expression. %s', tiebreak_expr)
         related_samples_to_keep = (
             kinship_kt
                 .key_by("i")
@@ -163,7 +164,11 @@ def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = No
                     tie_breaker = tiebreak_expr
                 )
         )
+        related_samples_to_remove = related_samples - {x.id for x in related_samples_to_keep}
     else:
-        related_samples_to_keep = related_pairs.maximal_independent_set("i", "j")
-    related_samples_to_remove = related_samples - set(related_samples_to_keep)
+        related_samples_to_keep = kinship_kt.maximal_independent_set("i", "j")
+        related_samples_to_remove = related_samples - set(related_samples_to_keep)
+        
+    logger.info('Of the %s samples observed in the kinship matrix, we retain %s and exclude %s.', len(related_samples), len(set(related_samples_to_keep)), len(related_samples_to_remove))
+
     return(related_samples_to_remove)

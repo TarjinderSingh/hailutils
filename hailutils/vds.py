@@ -113,3 +113,37 @@ def change_contig(outfile, infile, add = True):
     g.close()
     rename("{0}.vcf".format(outroot))
     unix_cmd("bgzip -f {0}.vcf".format(outroot))
+
+
+def export_vcf(
+    outfile,
+    vds, 
+    annotate_info_exprs = [
+        'va.info.AC = va.qc.AC',
+        'va.info.AF = va.qc.AF',
+        'va.info.AN = va.qc.nCalled * 2'
+    ],
+    filter_variants_expr = 'va.qc.AC >= 1',
+    select_info_fields = [
+        'AC', 'AF', 'AN',
+        'BaseQRankSum', 'ClippingRankSum',
+        'DP', 'FS', 'InbreedingCoeff',
+        'MQ', 'MQRankSum', 'QD', 'ReadPosRankSum', 'SOR', 
+        'VQSLOD', 'culprit'
+    ]
+):
+    
+    logger.info('Annotate INFO field: %s', ', '.join(annotate_info_exprs))
+    vds = vds.annotate_variants_expr(annotate_info_exprs)
+    
+    if filter_variants_expr:
+        logger.info('Filter variants based on expression: %s', filter_variants_expr)
+        vds = vds.filter_variants_expr(filter_variants_expr)
+    
+    if select_info_fields:
+        logger.info('Retain the following field fields: %s', ', '.join(select_info_fields))
+    vds = vds.annotate_variants_expr('va.info = select(va.info, {})'.format(', '.join(select_info_fields)))
+ 
+    log_summary(vds)
+    logger.info('Writing VDS as VCF: %s', outfile)
+    vds.export_vcf(outfile)  

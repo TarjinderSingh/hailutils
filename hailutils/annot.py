@@ -7,6 +7,10 @@ import logging
 from pprint import pprint
 from hail import *
 
+from cloudio import *
+from vds import *
+from keytable import *
+
 logging.basicConfig(format="%(levelname)s (%(name)s %(lineno)s): %(message)s")
 logger = logging.getLogger("annot")
 logger.setLevel(logging.INFO)
@@ -641,7 +645,14 @@ def parse_selected_transcript_consequences(vds, transcript_ids, name):
     vds = vds.annotate_variants_expr([ expr.format('va.ann.{}'.format(name)) for expr in exprs  ])
     return(vds)
 
-def get_transcript_consequence_table(vds, columns = [ 'v', 'va.tcsq' ]):
+def parse_basic_transcript_consequences(vds):
+    logger.info('Read GENCODE basic transcripts.')
+    basic_transcript_ids = set(parse('gs://exome-qc/resources/gencode_v19/2017-10-10_gencode-basic-transcripts.tsv', split = '\t', skip = 1, cols = 1))
+    logger.info('Parse consequences of GENCODE basic transcripts.')
+    vds = parse_selected_transcript_consequences(vds, basic_transcript_ids, 'basic')
+    return(vds)
+
+def get_transcript_consequence_dataframe(vds, columns = [ 'v', 'va.tcsq' ]):
     return(
         vds
             .variants_table()
@@ -652,6 +663,8 @@ def get_transcript_consequence_table(vds, columns = [ 'v', 'va.tcsq' ]):
             .flatten()
             .to_pandas()
     )
+
+
 
 def annotate_mpc(vds):
     logger.info('Annotate with MPC scores.')
@@ -861,3 +874,96 @@ def get_exome_called_keytable():
     return(
         KeyTable.import_bed('gs://sczmeta_exomes/data/regions/exome_calling_regions.merged.v1.bed')
     )
+
+def annotate_paralog(vds):
+    logger.info('Import paralog scores.')
+    kt = (
+        vds.hc
+            .read_table('gs://exome-qc/resources/paralog_score/hg19.paralog.allScores.zscore.kt')
+            .key_by('variant')
+            .select(
+                [
+                    'variant',
+                    'region', 
+                    'Gene.refGene',
+                    'ExonicFunc.refGene',
+                    'PARASUBFAM_ID',
+                    'PARASUBSCOREzSCORE'
+                ]
+            )
+    )
+    logger.info('Annotate VDS with missense regions.')
+    vds = vds.annotate_variants_table(kt, 'va.paralog_score')
+    return(vds)
+
+def annotate_dbsnp(vds, version = 'hg19'):
+    if version == 'hg19':
+        path = 'gs://exome-qc/resources/dbsnp/human_9606_b150_GRCh37p13/dbsnp-150-grch37.vds'
+    else:
+        path = 'gs://exome-qc/grch38/dbsnp/human_9606_b150_GRCh38p7/dbsnp-150-grch38.vds'
+
+    logger.info('Import dbsnp database (version %s).', version)
+    avds = (
+        vds.hc
+            .read(path)
+            .annotate_variants_expr('va.dbsnp = select(va.dbsnp, rsid, build)')
+    )
+    logger.info('Annotate variant with rsid.')
+    vds = vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)')
+    return(vds)
+
+def run_current_pipeline(vds):
+    vds = run_vep_pipeline2(vds)
+    vds = parse_basic_transcript_consequences(vds)
+
+    # Annotate with frequency databases
+    vds = annotate_nonpsych_exac_frequencies(vds)
+    vds = annotate_gnomad_frequencies(vds)
+
+    # Annotate with CADD scores
+    vds = annotate_cadd10(vds)
+    vds = annotate_cadd13(vds)
+
+    # Annotate with MPC, splice, and constrained regions
+    vds = annotate_mpc(vds)
+    vds = annotate_splice(vds)
+    vds = annotate_constraint(vds)
+    vds = annotate_paralog(vds)
+
+    # dbSNP
+    vds = annotate_dbsnp(vds)
+
+    # Annotate with LoF intolerance
+    # vds = annotate_nonpsych_lof_intolerant_genes(vds)
+    return(vds)
+
+def get_annotation_table(
+    vds, 
+    filter_expr = 'va.ann.all.minscore <= 15',
+    keep_cols = [
+        'v', 
+        'va.ann.canonical.csq', 'va.ann.canonical.gene_id', 'va.ann.canonical.minscore',
+        'va.ann.canonical.loftee', 'va.ann.canonical.polyphen', 
+        'va.gnomad.AC', 'va.nonpsych_gnomad.AC'
+    ],
+    prettify_headers = ['va.ann.canonical', 'va.ann', 'va'],
+    explode_gene = True):
+    if filter_expr:
+        logger.info('Filter annotation VDS based on expression: %s', filter_expr)
+        vds = vds.filter_variants_expr(filter_expr)
+    
+    logger.info('Select columns and convert to KeyTable.')
+    kt = (
+        vds
+            .variants_table()
+            .flatten()
+            .select(keep_cols)
+    )
+    kt = kt.rename(prettify_columns(kt.columns, prettify_headers))
+    logger.info('%s variants observed in annotation table.', kt.count())
+    
+    if explode_gene:
+        logger.info('Explode gene column.')
+        kt = kt.explode('gene_id')
+    return(kt)
+    

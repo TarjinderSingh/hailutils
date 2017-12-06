@@ -98,3 +98,30 @@ def variant_filter_expr(
     expr = ' && '.join(expr_list)
     logger.info('The following expression is used to filter variants: %s', expr)
     return(expr)
+
+def basic_variant_qc(vds, root = 'va.basic_qc', sample_filt_expr = ""):
+    logger.info('Perform basic variant QC.')
+    if sample_filt_expr != "":
+        logger.info('Restricting to samples using the following expression: %s', sample_filt_expr)
+    vds = vds.annotate_variants_expr(allele_metrics_exprs(root = root, sample_filt_expr = sample_filt_expr, hardcall = True))
+    return(vds)
+
+def exclude_monoallelic(vds):
+    logger.info('Calculate AC (ignoring multiallelic sites).')
+    vds = vds.annotate_variants_expr(allele_metrics_exprs(hardcall = True))
+
+    logger.info('Exclude monoallelic sites.')
+    vds = vds.filter_variants_expr('va.metrics.AC > 0')
+    return(vds)
+
+def variant_qc_subset(vds, sample_expr, root = 'va.qc'):
+    logger.info('')
+    kt = (
+        vds
+        .filter_samples_expr(sample_expr)
+        .variant_qc(root)
+        .annotate_variants_expr('va = select(va, `{}`)'.format(root.split('.')[1]))
+        .variants_table()
+    )
+    vds = vds.annotate_variants_table(kt, expr = 'va = merge(va, table)')
+    return(vds)

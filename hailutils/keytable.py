@@ -58,6 +58,9 @@ def interval_length(interval_col = 'region', length_col = 'length'):
 def interval_to_bed(interval_col = 'region', chrom_col = 'chrom', start_col = 'start', end_col = 'end'):
     return([ '{1} = {0}.start.contig, {2} = {0}.start.position - 1, {3} = {0}.end.position - 1'.format(interval_col, chrom_col, start_col, end_col)])
 
+def bed_to_interval(interval_col = 'region', chrom_col = 'chrom', start_col = 'start', end_col = 'end'):
+    return([ '{0} = Interval(str(`{1}`), `{2}` + 1, `{3}` + 1)'.format(interval_col, chrom_col, start_col, end_col) ])
+
 def prettify_columns(columns, strip_match = None, strip_all = False):
     if strip_all:
         return({ col:re.split('\.', col)[-1] for col in columns })
@@ -127,3 +130,9 @@ def flattened_to_vds(kt):
 
 def to_vds(kt):
     return(VariantDataset.from_table(kt))
+
+def semi_join(kt1, kt2, key1 = 'Sample', key2 = 'Sample'):
+    kt = kt1.key_by(key1).join(kt2.key_by(key2).select(key2))
+    if (key1 != key2):
+        kt = kt.drop(key2)
+    return(kt)

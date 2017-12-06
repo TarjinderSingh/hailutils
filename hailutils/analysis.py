@@ -81,3 +81,53 @@ def logreg_keytable(
 
 def firth_keytable(vds, method = 'firth', root = 'va.firth', *args, **kwargs):
     return(logreg_keytable(vds, method = method, root = root, *args, **kwargs))
+
+def get_results_table(
+    vds, 
+    filter_expr = None,
+    keep_cols = [
+        'Variant',
+        'va.rsid',
+        'va.info.VQSLOD',
+        'va.prefilt.vqc.callRate',
+        'va.prefilt.vqc.AC',
+        'va.prefilt.vqc.dpMean',
+        'va.prefilt.vqc.pHWE',
+        'va.prefilt.hetGQ.mean',
+        'va.prefilt.hetAB.mean',
+        'va.prefilt.hetDP.mean',
+        'va.postfilt.vqc.callRate',
+        'va.firth.beta',
+        'va.firth.chi2',
+        'va.firth.pval',
+        'va.firth.fit.converged',
+        'va.wald.beta',
+        'va.wald.se',
+        'va.wald.zstat',
+        'va.wald.pval',
+        'va.wald.fit.converged',
+        'va.exact.Xcase',
+        'va.exact.Xctrl',
+        'va.exact.Ncase',
+        'va.exact.Nctrl',
+        'va.exact.AFcase',
+        'va.exact.AFctrl',
+        'va.exact.ctt.pValue',
+        'va.exact.ctt.oddsRatio'
+    ],
+    prettify_headers = ['va', 'va.exact']):
+    
+    if filter_expr:
+        logger.info('Filter results VDS based on expression: %s', filter_expr)
+        vds = vds.filter_variants_expr(filter_expr)
+    
+    logger.info('Return results as KeyTable.')
+    kt = (
+        vds 
+            .variants_table()
+            .flatten()
+            .annotate('Variant = str(v)')
+            .select(keep_cols)
+    )
+    kt = kt.rename(prettify_columns(kt.columns, strip_match = prettify_headers))
+    return(kt)
