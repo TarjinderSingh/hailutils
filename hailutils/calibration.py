@@ -113,10 +113,9 @@ def extract_rf_keytable(vds):
             .select([ 'v', 'va.in1000G.AF', 'va.inMills', 'va.info.QD' ] + rf_features)
     )
 
-def prepare_vds_for_calibration(vds):
-    vds = annotate_gatk_bundle(vds)
+def prepare_vds_for_calibration(vds, gatk_bundle = True):
     logger.info('Annotate with site and allele features for variant calibration.')
-    return(
+    vds = (
         vds
             .annotate_variants_expr(site_feature_exprs())
             .split_multi()
@@ -124,7 +123,10 @@ def prepare_vds_for_calibration(vds):
             .annotate_variants_expr(allele_feature_exprs2() + allele_metrics_exprs2())
             .annotate_variants_expr(hard_filter_exprs())
     )
-
+    if gatk_bundle:
+        vds = annotate_gatk_bundle(vds)
+    return(vds)
+    
 def concordance(left_vds, right_vds):
     summary, samples, variants = left_vds.concordance(right_vds)
     summary = summarize_concordance(summary)

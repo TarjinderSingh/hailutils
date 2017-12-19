@@ -153,3 +153,11 @@ def export_vcf(
     log_summary(vds)
     logger.info('Writing VDS as VCF: %s', outfile)
     vds.export_vcf(outfile)  
+
+def unflatten_vds(vds):
+    all_cols = [ f.name for f in vds.variant_schema.fields ] 
+    cols = [ c for c in all_cols if c.startswith('va') ]
+    add_cols_expr = [ '{0} = va.`{0}`'.format(c) for c in cols  ] 
+    drop_cols = ', '.join([ '`{}`'.format(c) for c in cols ])
+    drop_cols_expr = 'va = drop(va, {})'.format(drop_cols)
+    return(vds.annotate_variants_expr(add_cols_expr).annotate_variants_expr(drop_cols_expr))
