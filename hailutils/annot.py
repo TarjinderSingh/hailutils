@@ -167,21 +167,18 @@ def run_vep_pipeline2(vds):
     return(vds) 
     
 def annotate_vep_global(vds):  
-    ####
-    # Extract protein-coding Ensembl IDs
+    logger.info('Extract protein-coding Ensembl IDs.')
     gene_ids = (
         vds
             .query_variants(
                 """
                 variants
-                    .map(
+                    .flatMap(
                         v => va.vep.transcript_consequences
                             .filter(tc => tc.biotype == "protein_coding")
                             .map(x => x.gene_id)
                     )
-                    .collect()
-                    .flatten()
-                    .toSet()
+                    .collectAsSet()
                     .toArray()
                 """
             )
@@ -189,20 +186,17 @@ def annotate_vep_global(vds):
 
     vds = vds.annotate_global('global.gene_ids', gene_ids, TArray(TString()))
 
-    ####
-    # Extract possible biotypes 
+    logger.info('Extract possible biotypes.')
     biotypes = (
         vds
             .query_variants(
                 """
                 variants
-                    .map(
+                    .flatMap(
                         v => va.vep.transcript_consequences
                             .map(tc => tc.biotype)
                         )
-                    .collect()
-                    .flatten()
-                    .toSet()
+                    .collectAsSet()
                     .toArray()
                 """
             )
@@ -210,31 +204,25 @@ def annotate_vep_global(vds):
 
     vds = vds.annotate_global('global.biotypes', biotypes, TArray(TString()))
 
-    ####
-    # Extract consequences for protein-coding genes
-    csqs = (   
+    logger.info('Extract consequences for protein-coding genes.')
+    csqs = (
         vds
             .query_variants(
                 """
                 variants
-                    .map(
+                    .flatMap(   
                         v => va.vep.transcript_consequences
                             .filter(tc => tc.biotype == "protein_coding")
-                            .map(tc => tc.consequence_terms)
-                        )
-                    .collect()
-                    .flatten()
-                    .flatten()
-                    .toSet()
-                    .toArray()
+                            .flatMap(tc => tc.consequence_terms)
+                    )
+                    .collectAsSet()
+                    .toArray()                       
                 """
             )
     )
-
     vds = vds.annotate_global('global.csqs', csqs, TArray(TString()))
 
-    ####
-    # Annotate with sequence ontology map (essential for parse_vep)
+    logger.info('Annotate with sequence ontology map (essential for parse_vep).')
     so_dict = { s: i for i, s in enumerate(SO) }
     vds = vds.annotate_global('global.somap', so_dict, TDict(TString(), TInt()))
     
@@ -664,8 +652,6 @@ def get_transcript_consequence_dataframe(vds, columns = [ 'v', 'va.tcsq' ]):
             .to_pandas()
     )
 
-
-
 def annotate_mpc(vds):
     logger.info('Annotate with MPC scores.')
     kt = (
@@ -761,7 +747,7 @@ def annotate_cadd10(vds):
     vds = vds.annotate_variants_table(cadd_kt, root = 'va.cadd10')
     return(vds)
 
-def annotate_constraint(vds):
+def annotate_regional_constraint(vds):
     logger.info('Import missense constrained regions.')
     mis_regions = (
         vds.hc
@@ -795,7 +781,7 @@ def annotate_constraint(vds):
                 'lambda_constrained'
             ]
         ), 
-        root = 'va.constraint'
+        root = 'va.regional_constraint'
     )
 
     #logger.info('Annotate with loss-of-function intolerant genes.')
@@ -806,51 +792,22 @@ def annotate_constraint(vds):
     mis_intolerant_genes = set(mis_regions.filter('mis_z >= 3.09').query('gene_id.collect().toSet()'))
     vds = vds.annotate_global('global.mis_intolerant_genes', mis_intolerant_genes, TSet(TString()))
     
-    logger.info('Annotate with genes that contain      regions.')
+    logger.info('Annotate with genes that contain constrained regions.')
     regional_intolerant_genes = set(mis_regions.filter('obs_exp <= 0.6').query('gene_id.collect().toSet()'))
     vds = vds.annotate_global('global.regional_intolerant_genes', regional_intolerant_genes, TSet(TString()))
 
     return(vds)
 
-def annotate_nonpsych_lof_intolerant_genes(vds):
-    gene_set = (
-        vds.hc
-            .read_table('gs://exome-qc/resources/exac_release0.3.1/constraint/exac_constraint_nonpsych.kt')
-            .filter('pLI >= 0.9')
-            .query('gene_id.collect().toSet()')
-     )
-    
-    vds = (
-        vds
-            .annotate_global('global.lof_intolerant_genes', gene_set, TSet(TString()))
-            .annotate_variants_expr(
-                '''
-                va.genesets.in_lof_intolerant_genes = 
-                    if (! va.gene_id.filter(x => global.lof_intolerant_genes.contains(x)).isEmpty())
-                        true
-                    else
-                        false
-                '''
-            )
-    )
-    return(vds)
-
-def annotate_geneset(vds, name, geneset = None):
-    if isinstance(geneset, set):
-        vds = vds.annotate_global('global.{}'.format(name), gene_set, TSet(TString()))
-    vds = (
-        vds
-            .annotate_variants_expr(
-                '''
-                va.genesets.in_{0} = 
-                    if (! va.gene_id.filter(x => global.{0}.contains(x)).isEmpty())
-                        true
-                    else
-                        false
-                '''.format(name)
+def annotate_ccrs(vds):
+    logger.info('Annotate with constrained coding regions.')
+    return(
+        vds.annotate_variants_table(
+            vds.hc
+                .read_table('gs://exome-qc/resources/ccrs_quinlan/ccrs.v1.20171112.kt')
+                .select(['region', 'ccr_pct']), 
+            root = 'va.ccrs'
         )
     )
-    return(vds)
 
 def get_gencode_keytable():
     return(KeyTable.import_bed('gs://exome-qc/resources/gencode_v19/gencode.v19.cds.merged_by_exonid.merged.bed'))
@@ -892,8 +849,15 @@ def annotate_paralog(vds):
                 ]
             )
     )
-    logger.info('Annotate VDS with missense regions.')
+    logger.info('Annotate variants with paralog scores.')
     vds = vds.annotate_variants_table(kt, 'va.paralog_score')
+    return(vds)
+
+def annotate_paralog_region(vds):
+    logger.info('Import paralog region scores.')
+    kt = vds.hc.read_table('gs://exome-qc/resources/paralog_score/hg19-paralog-zscore-by-interval.kt')
+    logger.info('Annotate variants with paralog scores.')
+    vds = vds.annotate_variants_table(kt, 'va.paralog_region_score')
     return(vds)
 
 def annotate_dbsnp(vds, version = 'hg19'):
@@ -912,7 +876,7 @@ def annotate_dbsnp(vds, version = 'hg19'):
     vds = vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)')
     return(vds)
 
-def run_current_pipeline(vds):
+def run_current_annotation_pipeline(vds):
     vds = run_vep_pipeline2(vds)
     vds = parse_basic_transcript_consequences(vds)
 
@@ -927,9 +891,11 @@ def run_current_pipeline(vds):
     # Annotate with MPC, splice, and constrained regions
     vds = annotate_mpc(vds)
     vds = annotate_splice(vds)
-    vds = annotate_constraint(vds)
+    vds = annotate_regional_constraint(vds)
+    vds = annotate_ccrs(vds)
     vds = annotate_paralog(vds)
-
+    vds = annotate_paralog_region(vds)
+    
     # dbSNP
     vds = annotate_dbsnp(vds)
 
@@ -966,4 +932,3 @@ def get_annotation_table(
         logger.info('Explode gene column.')
         kt = kt.explode('gene_id')
     return(kt)
-    

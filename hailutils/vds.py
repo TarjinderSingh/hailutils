@@ -56,8 +56,14 @@ def extract_variants(vds, variant_str_list):
     variant_str_list = [ variant_str_list ] if isinstance(variant_str_list, str) else variant_str_list
     return(vds.filter_variants_list([ Variant.parse(vstr) for vstr in variant_str_list ], keep = True))
 
-def extract_genotypes(vds):
-    return
+def extract_nonref_genotypes(vds, het_only = False, homvar_only = False):
+    if het_only:
+        expr = 'isHet'
+    elif homvar_only:
+        expr = 'isHomVar'
+    else:
+        expr = 'isCalledNonRef'
+    return(vds.filter_samples_expr('gs.map(g => g.{}().toInt()).sum() > 0'.format(expr)))
 
 def sites(vds):
     return(vds.drop_samples())

@@ -61,7 +61,17 @@ def interval_to_bed(interval_col = 'region', chrom_col = 'chrom', start_col = 's
 def bed_to_interval(interval_col = 'region', chrom_col = 'chrom', start_col = 'start', end_col = 'end'):
     return([ '{0} = Interval(str(`{1}`), `{2}` + 1, `{3}` + 1)'.format(interval_col, chrom_col, start_col, end_col) ])
 
-def prettify_columns(columns, strip_match = None, strip_all = False):
+def variant_to_interval(interval_col = 'region', variant_col = 'v'):
+    return([ '{0} = Interval({1}.contig, {1}.start, {1}.start + 1)'.format(interval_col, variant_col) ])
+
+def import_bed_restrict_chrom(path, chrom):
+    chrom = str(chrom)
+    logger.info('Restrict to coding region in chr{}.'.format(chrom))
+    kt = KeyTable.import_bed(path)
+    kt = kt.filter('interval.start.contig == "{}"'.format(chrom))
+    return(kt)
+
+def _prettify_columns(columns, strip_match = None, strip_all = False):
     if strip_all:
         return({ col:re.split('\.', col)[-1] for col in columns })
     if strip_match:
@@ -78,6 +88,9 @@ def prettify_columns(columns, strip_match = None, strip_all = False):
             ]
         )
         return({ col:re.sub(regex, '', col) for col in columns })
+    
+def prettify_columns(kt, strip_match = None, strip_all = False):
+    return(kt.rename(_prettify_columns(kt.columns, strip_match = strip_match, strip_all = strip_all)))
     
 def match_columns(columns, match = None, full_match = None):
     if full_match:
@@ -136,3 +149,47 @@ def semi_join(kt1, kt2, key1 = 'Sample', key2 = 'Sample'):
     if (key1 != key2):
         kt = kt.drop(key2)
     return(kt)
+
+def anti_join(kt1, kt2, key1 = 'Sample', key2 = 'Sample'):
+    kt = kt1.key_by(key1).join(kt2.key_by(key2).select(key2).annotate('intersection = 1'), how = 'outer')
+    kt = kt.filter('isMissing(intersection)').drop('intersection')
+    if (key1 != key2):
+        kt = kt.drop(key2)
+    return(kt)
+
+def generate_key_expr(kt, drop_col):
+    return([ '`{0}` = `{0}`'.format(f.name) for f in kt.schema.fields if f.name != drop_col])
+
+def concat_keytable(kt0, kt1):
+    kt0_cols = { f.name + '::' + str(f.typ) for f in kt0.schema.fields }
+    kt1_cols = { f.name + '::' + str(f.typ) for f in kt1.schema.fields }
+
+    if not len(kt0_cols.difference(kt1_cols)) == 0:
+        expr = [ '{0} = NA: {1}'.format(*f.split('::')) for f in kt0_cols.difference(kt1_cols) ]
+        kt1 = kt1.annotate(expr)
+
+    if not len(kt1_cols.difference(kt0_cols)) == 0:
+        expr = [ '{0} = NA: {1}'.format(*f.split('::')) for f in kt1_cols.difference(kt0_cols) ]
+        kt0 = kt0.annotate(expr)
+
+    kt1 = kt1.select(kt0.columns)    
+    kt0 = kt0.key_by([])
+    kt1 = kt1.key_by([])
+
+    return(kt0.union(kt1))
+
+def union_keytables(kt_list):
+    return(reduce(lambda x, y: x.union(y), kt_list))
+
+def write_parquet(outfile, kt, overwrite = False, clean_columns = True, num_partitions = None):
+    if clean_columns:
+        logger.info('Clean columns.')
+        kt = kt.rename({x.name: x.name.replace('.', '_').strip('`') for x in kt.schema.fields})
+    if num_partitions:
+        logger.info('Repartition to %s partitions.', num_partitions)
+        kt = kt.repartition(num_partitions)
+    df = kt.to_dataframe().write
+    if overwrite:
+        df = df.mode('overwrite')
+    logger.info('Export as parquet.')
+    df.parquet(outfile)

@@ -8,6 +8,8 @@ from pprint import pprint
 from hail import *
 import pandas as pd
 
+from variantqc import *
+
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -182,3 +184,8 @@ def calculate_variant_concordance(vkt):
             )
             .drop('m')
     )
+
+def get_shared_sample_ids(vds0, vds1):
+    sample_ids0 = vds0.sample_ids
+    sample_ids1 = vds1.sample_ids
+    return(list(set(sample_ids0).intersection(set(sample_ids1))))
