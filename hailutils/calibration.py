@@ -6,7 +6,7 @@ import re
 import logging
 from pprint import pprint
 from hail import *
-import pandas as pd
+#import pandas as pd
 
 from variantqc import *
 
@@ -129,7 +129,7 @@ def prepare_vds_for_calibration(vds, gatk_bundle = True):
     
 def concordance(left_vds, right_vds):
     summary, samples, variants = left_vds.concordance(right_vds)
-    summary = summarize_concordance(summary)
+    # summary = summarize_concordance(summary)
     return(summary, samples, variants)
 
 def summarize_concordance(summary):
