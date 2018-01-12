@@ -125,3 +125,11 @@ def variant_qc_subset(vds, sample_expr, root = 'va.qc'):
     )
     vds = vds.annotate_variants_table(kt, expr = 'va = merge(va, table)')
     return(vds)
+
+def gnomad_genotype_filter_expr(ADJ_GQ = 20, ADJ_DP = 10, ADJ_AB = 0.2):
+    ADJ_CRITERIA = 'g.gq >= %(gq)s && g.dp >= %(dp)s && (' \
+               '!g.isHet || ' \
+               '(g.gtj == 0 && g.ad[g.gtk]/g.dp >= %(ab)s) || ' \
+               '(g.gtj > 0 && g.ad[g.gtj]/g.dp >= %(ab)s && g.ad[g.gtk]/g.dp >= %(ab)s)' \
+               ')' % {'gq': ADJ_GQ, 'dp': ADJ_DP, 'ab': ADJ_AB}
+    return(ADJ_CRITERIA)

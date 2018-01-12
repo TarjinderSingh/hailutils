@@ -15,7 +15,10 @@ except:
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-    
+
+def mktemp(outdir, suffix):
+    return(outdir + tempfile.mktemp(suffix))
+
 def log_summary(vds):
     logger.info('%s samples and %s variants are observed in the data set', *list(vds.count()))
     
@@ -161,3 +164,10 @@ def unflatten_vds(vds):
     drop_cols = ', '.join([ '`{}`'.format(c) for c in cols ])
     drop_cols_expr = 'va = drop(va, {})'.format(drop_cols)
     return(vds.annotate_variants_expr(add_cols_expr).annotate_variants_expr(drop_cols_expr))
+
+def write_read_vds(vds, tmpdir = 'gs://tsingh'):
+    path = mktemp(tmpdir, '.vds')
+    logger.info('Write temporary VDS to %s', path)
+    vds.write(path)
+    logger.info('Read VDS back into memory.')
+    return(vds.hc.read(path))

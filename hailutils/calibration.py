@@ -157,9 +157,8 @@ def calculate_sample_concordance(skt):
             .annotate([
                 'TP = m.map(x => x[3])[3] + m.map(x => x[4])[4]', # true positives
                 'P = m.map(x => x[3]).sum() + m.map(x => x[4]).sum()', # total true variants, TP + FN
-                'FP = m.map(x => x[2])[3] + m.map(x => x[2])[4] + m.map(x => x[3])[4]', # false positives
-                'N = m.map(x => x[2]).sum()', # total true variants, TP + FN
-
+                'FP = m[3][0] + m[3][1] + m[3][2] + m[4][0] + m[4][1] + m[4][2] + m[4][3]', # false positives
+                'N = m.map(x => x[2]).sum()', # true negative variants (and N + P are all variants in the right data set)
             ])
             .annotate('TPR = TP/P, FPR = FP/N')
             .select(['s', 'nDiscordant', 'TP', 'P', 'TPR', 'FP', 'N', 'FPR'])

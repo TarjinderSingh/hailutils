@@ -17,6 +17,8 @@ essage)s")
 logger = logging.getLogger("utils")
 logger.setLevel(logging.INFO)
 
+import tempfile
+
 import pyspark.sql
 from pyspark.ml.feature import *
 from pyspark.ml.classification import *
@@ -24,6 +26,12 @@ from pyspark.ml import *
 from pyspark.sql import Row
 from pyspark.sql import SparkSession
 import pyspark
+
+import pandas as pd
+import numpy as np
+
+def mktemp(outdir, suffix):
+    return(outdir + tempfile.mktemp(suffix))
 
 def get_ann_type(annotation, schema, root = 'va'):
     return get_ann_field(annotation, schema, root).typ
@@ -133,8 +141,12 @@ def impute_features_median(vds, features, relative_error=0.01):
     kt = kt.select([c for c in SSQL_features.values()])
     df = kt.to_dataframe()
 
+    logger.info('Persist dataframe.')
+    df.persist()
+
     quantiles = {}
     for f,c in SSQL_features.iteritems():
+        logger.info('Imputing median for %s', c)
         col_no_na = df.select(c).dropna()
         if col_no_na.first() is not None:
             quantiles[f] = col_no_na.approxQuantile(c, [0.5], relative_error)[0]
@@ -142,6 +154,34 @@ def impute_features_median(vds, features, relative_error=0.01):
     vds = vds.annotate_variants_expr(['{0} = orElse({0},{1})'.format(f,quantiles[f]) for f in SSQL_features.keys()])
     return vds
 
+def conv(x):
+    if not x:
+        return np.nan    
+    try:
+        return np.float64(x)
+    except:        
+        return np.nan
+
+def impute_features_median_local(vds, features, tmp_dir = 'gs://tsingh'):
+    logger.info('Export features to tsv.')
+    tmpfile = mktemp(tmp_dir, '.tsv')
+    vds.export_variants(tmpfile, ', '.join([ '{} = {}'.format(f, f) for f in features ] ))
+    
+    logger.info('Read into Pandas.')
+    data = pd.read_table(hadoop_read(tmpfile), converters = { f:conv for f in features }, low_memory = False)
+    
+    logger.info('Calculate median.')
+    for col in data.columns:
+        data[col] = data[col].astype(float)
+    median = data.median(axis = 0, skipna = True)
+    
+    quantiles = { x[0]: x[1] for x in median.iteritems() }
+    
+    exprs = [ '{0} = orElse({0},{1})'.format(f, quantiles[f]) for f in features ]
+    logger.info('Impute median using the following expression: %s', ', '.join(exprs))
+    vds = vds.annotate_variants_expr(exprs)
+    
+    return(vds) 
 
 def vds_to_rf_df(vds, rf_features, label='va.label'):
     """
