@@ -96,6 +96,21 @@ def index_into_arrays(a_based_annotations=None, r_based_annotations=None, vep_ro
 
     return annotations
 
+def split_multi_info(vds):
+    # Figure out format of INFO field annotations
+    annotations, a_annotations, g_annotations, dot_annotations = get_numbered_annotations(vds)
+
+    # expression to split fields appropriately
+    a_annotations = [ 'va.info.' + ann.name for ann in a_annotations ]
+    annotation_exprs = index_into_arrays(a_annotations)
+
+    logger.info('Split variants and annotations appropriately.')
+    vds = (
+        vds
+            .split_multi()
+            .annotate_variants_expr(annotation_exprs)
+    )
+    return(vds)
 
 ####
 # Map VEP consequences to integer
@@ -713,6 +728,19 @@ def annotate_gnomad_frequencies(vds):
     vds = vds.annotate_variants_vds(gnomad_vds, expr = 'va = merge(va, vds)')
     return(vds)
     
+def annotate_gnomad_frequencies_db(vds):
+    logger.info('Annotate with gnomAD frequencies.')
+    vds = vds.annotate_variants_db([ 'va.gnomAD' ])
+
+    logger.info('Clean up variant schema.')
+    vds = vds.annotate_variants_expr(
+        [
+            'va.gnomAD.genomes = select(va.gnomAD.genomes, filters, AC, AN, AF, AC_raw, AN_raw, AF_raw, AS_FilterStatus)',
+            'va.gnomAD.exomes = select(va.gnomAD.exomes, filters, AC, AN, AF, AC_raw, AN_raw, AF_raw, AS_FilterStatus)',
+        ]
+    )
+    return(vds)
+
 def annotate_nonpsych_exac_frequencies(vds):
     logger.info('Annotate with non-psych ExAC frequencies.')
     exac_vds = vds.hc.read('gs://exome-qc/resources/exac_release0.3.1/ExAC.r0.3.nonpsych.sites.vds')

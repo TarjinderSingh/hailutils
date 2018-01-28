@@ -7,6 +7,7 @@ import logging
 from pprint import pprint
 from hail import *
 #import pandas as pd
+import itertools
 
 from variantqc import *
 
@@ -162,6 +163,27 @@ def calculate_sample_concordance(skt):
             ])
             .annotate('TPR = TP/P, FPR = FP/N')
             .select(['s', 'nDiscordant', 'TP', 'P', 'TPR', 'FP', 'N', 'FPR'])
+    )
+
+def calculate_sample_concordance2(skt):
+    indices = list(itertools.product([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]))
+    return(
+        skt
+            .rename({'concordance': 'm'})
+            .annotate(
+                [ 'm{0}{1} = m[{0}][{1}]'.format(*index) for index in indices ] + \
+                [
+                    'TP = m.map(x => x[3])[3] + m.map(x => x[4])[4]', # true positives
+                    'P = m.map(x => x[3]).sum() + m.map(x => x[4]).sum()', # total true variants, TP + FN
+                    'FP = m[3][0] + m[3][1] + m[3][2] + m[4][0] + m[4][1] + m[4][2] + m[4][3]', # false positives
+                    'N = m.map(x => x[2]).sum()', # true negative variants (and N + P are all variants in the right data set)
+                ]
+            )
+            .annotate('TPR = TP/P, FPR = FP/N')
+            .select(
+                ['s', 'nDiscordant', 'TP', 'P', 'TPR', 'FP', 'N', 'FPR'] + \
+                [ 'm{0}{1}'.format(*index) for index in indices ]
+            )
     )
 
 def calculate_variant_concordance(vkt):

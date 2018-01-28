@@ -145,7 +145,7 @@ def to_vds(kt):
     return(VariantDataset.from_table(kt))
 
 def semi_join(kt1, kt2, key1 = 'Sample', key2 = 'Sample'):
-    kt = kt1.key_by(key1).join(kt2.key_by(key2).select(key2))
+    kt = kt1.key_by(key1).join(kt2.key_by(key2).select(key2), how = 'inner')
     if (key1 != key2):
         kt = kt.drop(key2)
     return(kt)
