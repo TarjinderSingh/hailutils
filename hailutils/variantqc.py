@@ -16,6 +16,9 @@ def allele_metrics_exprs(root = "va.metrics", sample_filt_expr = "", hardcall = 
     exprs = [
         '{}.nSample = gs.filter(g => true {}).count()',
         '{}.nCalled = gs.filter(g => g.isCalled() {}).count()',
+        '{}.nHomRef = gs.filter(g => g.isHomRef() {}).count()',
+        '{}.nHet = gs.filter(g => g.isHet() {}).count()',
+        '{}.nHomVar = gs.filter(g => g.isHomVar() {}).count()',
         '{}.AC = gs.filter(g => g.isCalled() {}).map(g => g.nNonRefAlleles()).sum()'
     ]
     if not hardcall:
@@ -42,6 +45,58 @@ def allele_metrics_exprs2(root = "va.metrics", sample_filt_expr = ""):
     ]
     return([ x.format(root, sample_filt_expr) for x in exprs ])
 
+def sex_aware_allele_metrics_exprs2(root = "va.metrics", root_m = "va.metrics.male", root_f = "va.metrics.female"):
+    exprs = [
+        '''
+        {root}.callRate = 
+            if (! v.inYNonPar())
+                ({root_m}.nCalled + {root_f}.nCalled)/({root_m}.nSample + {root_f}.nSample)
+            else if (v.inYNonPar())
+                {root_m}.nCalled/{root_m}.nSample
+            else
+                NA: Float
+        ''',
+        '''
+        {root}.AC = 
+            if (! v.inXNonPar() && ! v.inYNonPar())
+                {root_m}.AC + {root_f}.AC
+            else if (v.inXNonPar())
+                {root_m}.AC/2 + {root_f}.AC
+            else if (v.inYNonPar())
+                {root_m}.AC/2
+            else
+                NA: Int
+        ''',
+        '''
+        {root}.AN = 
+            if (! v.inXNonPar() && ! v.inYNonPar())
+                ({root_m}.nCalled + {root_f}.nCalled) * 2
+            else if (v.inXNonPar())
+                {root_m}.nCalled + {root_f}.nCalled * 2
+            else if (v.inYNonPar())
+                {root_m}.nCalled
+            else
+                NA: Int
+        '''
+    ]
+    return([ x.format(root = root, root_m = root_m, root_f = root_f) for x in exprs ])    
+
+def hwe_expr(root = "va.metrics"):
+    return('{0}.hwe = hwe({0}.nHomRef, {0}.nHet, {0}.nHomVar)'.format(root))
+
+def sex_aware_hwe_expr(root = "va.metrics", root_m = "va.metrics.male", root_f = "va.metrics.female"):
+    return(
+        '''
+        {root}.hwe = 
+            if (v.isAutosomal() || v.XPar())
+                hwe({root_m}.nHomRef + {root_f}.nHomRef, {root_m}.nHet + {root_f}.nHet, {root_m}.nHomVar + {root_f}.nHomVar)
+            else if (v.inXNonPar())
+                hwe({root_f}.nHomRef, {root_f}.nHet, {root_f}.nHomVar)
+            else
+                NA: Struct{rExpectedHetFrequency:Double, pHWE:Double}
+        '''.format(root = root, root_m = root_m, root_f = root_f)
+    )
+
 def genotype_filter_expr(
     minDP = 10, homrefAB = 0.1, minhetAB = 0.2, 
     minhomrefGQ = 20, minSNPGQ = 20, minindelGQ = 90):
@@ -67,6 +122,47 @@ def genotype_filter_expr(
             )
         )
         '''.format(minDP = minDP, homrefAB = homrefAB, minhetAB = minhetAB, 
+                   minhomrefGQ = minhomrefGQ, minSNPGQ = minSNPGQ, minindelGQ = minindelGQ)
+    logger.info('The following expression is used to filter genotypes: %s', expr)
+    return(expr)
+
+def sex_aware_genotype_filter_expr(
+    isFemale = 'sa.pheno.isFemale', 
+    minDP = 10, minDP_male_PAR = 5, 
+    homrefAB = 0.1, minhetAB = 0.25, 
+    minhomrefGQ = 20, minSNPGQ = 20, minindelGQ = 20):
+    expr = '''
+        let ab = g.ad[1] / g.ad.sum in
+        (
+            (! v.inXNonPar() && ! v.inYNonPar() && g.ad.sum >= {minDP}) ||
+            ( (v.inXNonPar() || v.inYNonPar()) && 
+                (
+                    ( {isFemale} && g.ad.sum >= {minDP}) ||
+                    ( ! {isFemale} && g.ad.sum >= {minDP_male_PAR}) ||
+                    ( isMissing({isFemale}) && g.ad.sum >= {minDP} )
+                )
+            )
+        )
+        && 
+        (
+            (g.isHomRef && ab <= {homrefAB}) || 
+            (g.isHet && ab >= {minhetAB} && ab <= 1 - {minhetAB}) || 
+            (g.isHomVar && ab >= 1 - {homrefAB})
+        )
+        &&
+        (
+            (g.isHomRef && g.gq >= {minhomrefGQ}) ||
+            (
+                v.altAllele.isSNP && 
+                ( (g.isHet && g.gq >= {minSNPGQ}) || (g.isHomVar && g.gq >= {minSNPGQ}) )
+            ) ||
+            (
+                v.altAllele.isIndel && 
+                ( (g.isHet && g.gq >= {minindelGQ}) || (g.isHomVar && g.gq >= {minindelGQ}) )
+            )
+        )
+        '''.format(isFemale = isFemale, minDP = minDP, minDP_male_PAR = minDP_male_PAR,
+                   homrefAB = homrefAB, minhetAB = minhetAB, 
                    minhomrefGQ = minhomrefGQ, minSNPGQ = minSNPGQ, minindelGQ = minindelGQ)
     logger.info('The following expression is used to filter genotypes: %s', expr)
     return(expr)
