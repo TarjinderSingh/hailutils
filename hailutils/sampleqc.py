@@ -172,3 +172,68 @@ def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = No
     logger.info('Of the %s samples observed in the kinship matrix, we retain %s and exclude %s.', len(related_samples), len(set(related_samples_to_keep)), len(related_samples_to_remove))
 
     return(related_samples_to_remove)
+
+def sex_check(vds):
+    logger.info('Read in 1000 Genomes variants (with sex chromosomes).')
+    kt = (
+        hc
+            .read_table('gs://exome-qc/resources/1000-genomes-phase3/ALL.wgs.phase3_shapeit2_mvncall_integrated_v5a.20130502.snps.maf005.sites.kt')
+            .filter('v.contig == "22" || v.contig == "X" || v.contig == "Y"')
+    )
+
+    logger.info('Filter to 1000 Genomes variants.')
+    vds = vds.split_multi().filter_variants_table(kt, keep = True).repartition(500)
+     
+    logger.info('Variants in each chromosome: %s', vds.query_variants('variants.map(v => v.contig).counter()'))
+
+    logger.info('Apply variant filters to chr22, chrX, and chrY variants.')
+    vds = (
+        vds
+            .variant_qc()
+            .filter_variants_expr(
+                '''
+                (
+                    v.contig == "22" &&
+                    va.qc.callRate >= 0.97 && va.qc.AF >= 0.005 && 
+                    va.qc.pHWE >= 1e-05 && 
+                    va.qc.dpMean >= 7 && va.qc.dpMean <= 100 && 
+                    va.qc.dpMean/va.qc.dpStDev >= 0.5
+                ) || 
+                (
+                    v.contig == "X" &&
+                    va.qc.callRate >= 0.97 && va.qc.AF >= 0.005 && 
+                    va.qc.dpMean >= 7 && va.qc.dpMean <= 100
+                ) ||
+                (
+                    v.contig == "Y" &&
+                    va.qc.dpMean >= 3.5
+                )   
+                '''     
+            )
+    )
+    logger.info('Variants in each chromosome: %s', vds.query_variants('variants.map(v => v.contig).counter()'))
+
+    logger.info('Calculate depth metrics for chr22, chrX, and chrY.')
+    vds = (
+        vds.annotate_samples_expr(
+            [
+                'sa.dpMean_chr22 = gs.filter(g => v.contig == "22").map(g => g.dp).stats().mean',
+                'sa.dpMean_chrXPar = gs.filter(g => v.inXPar()).map(g => g.dp).stats().mean',
+                'sa.dpMean_chrYPar = gs.filter(g => v.inYPar()).map(g => g.dp).stats().mean',
+                'sa.dpMean_chrXNonPar = gs.filter(g => v.inXNonPar()).map(g => g.dp).stats().mean',
+                'sa.dpMean_chrYNonPar = gs.filter(g => v.inYNonPar()).map(g => g.dp).stats().mean',
+                'sa.dpZscoreMean_chr22 = gs.filter(g => v.contig == "22").map(g => (g.dp - va.qc.dpMean)/va.qc.dpStDev).stats().mean',
+                'sa.dpZscoreMean_chrX = gs.filter(g => v.inXNonPar()).map(g => (g.dp - va.qc.dpMean)/va.qc.dpStDev).stats().mean',
+                'sa.dpZscoreMean_chrY = gs.filter(g => v.inYNonPar()).map(g => (g.dp - va.qc.dpMean)/va.qc.dpStDev).stats().mean'
+            ]
+        )
+    )
+
+    logger.info('Impute sex.')
+    vds = vds.impute_sex()
+
+    logger.info('Return sample keytable.')
+    kt = vds.samples_table().flatten()
+
+    kt = prettify_columns(kt, ['sa', 'sa.imputesex'])
+    return(kt)

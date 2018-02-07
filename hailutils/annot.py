@@ -953,7 +953,7 @@ def get_annotation_table(
             .flatten()
             .select(keep_cols)
     )
-    kt = kt.rename(prettify_columns(kt.columns, prettify_headers))
+    kt = prettify_columns(kt, prettify_headers)
     logger.info('%s variants observed in annotation table.', kt.count())
     
     if explode_gene:

@@ -129,5 +129,56 @@ def get_results_table(
             .annotate('Variant = str(v)')
             .select(keep_cols)
     )
-    kt = kt.rename(prettify_columns(kt.columns, strip_match = prettify_headers))
+    kt = prettify_columns(kt, strip_match = prettify_headers)
     return(kt)
+
+# filt_expr = '`va.postfilt_metrics.AC` <= 5 && (isMissing(`va.nonpsych_gnomad.AC`) || `va.nonpsych_gnomad.AC` <= 5)'
+
+def nonref_genotypes_table(vds, filt_expr = None, explode_col = None):
+    '''
+    filt_expr: '`va.postfilt_metrics.AC` <= 5 && (isMissing(`va.nonpsych_gnomad.AC`) || `va.nonpsych_gnomad.AC` <= 5)'
+    explode_col: 'va.ann.canonical.gene_id'
+    '''
+    kt = (
+        vds
+            .genotypes_table()
+            .filter('g.gt > 0')
+            .flatten()
+    )
+    if filt_expr:
+        kt = kt.filter(filt_expr)
+    if explode_col:
+        kt = kt.explode(explode_col)
+    return(kt)
+
+def annotate_csq2(kt, csq_col = 'va.ann.canonical.csq'):
+    expr = 'csq2 = if (isDefined(`va.mpc.MPC`) && `va.mpc.MPC` >= 2) "mis2" else `{}`'.format(csq_col)
+    return(kt.annotate(expr))
+
+def sample_burden(kt, sample_col = 's', phe_col = 'sa.isCase', group_col = 'va.ann.canonical.gene_id', batch_col = None, csq_col = 'csq2', func = 'binary'):
+    '''
+    fun: binary or sum
+    '''
+    expr = None
+    if func == 'binary':
+        agg_expr = 'X = (g.map(g => g.gt).sum() > 0).toInt()'
+    elif func == 'sum':
+        agg_expr = 'X = g.map(g => g.gt).sum().toInt()'
+    else:
+        return(None)
+    
+    keys_expr = [
+        'Sample = `{}`'.format(sample_col),
+        'phe = `{}`'.format(phe_col),
+        'group = `{}`'.format(group_col),
+        'csq = `{}`'.format(csq_col)
+    ]
+    
+    if batch_col: 
+        keys_expr.append('batch = `{}`'.format(batch_col))
+    
+    return(kt.aggregate_by_key(keys_expr, agg_expr))
+
+def grouped_burden(kt, keys_list = [ 'group', 'phe', 'csq', 'batch' ], agg_expr = 'X = X.sum()'):
+    keys_expr = [ '`{0}` = `{0}`'.format(k) for k in keys_list ]
+    return(kt.aggregate_by_key(keys_expr, agg_expr))
