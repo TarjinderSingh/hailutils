@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def log_case_count(vds):
+    """Log case counts in VDS.
+    
+    Parameters
+    ----------
+    vds : Hail variant data set
+    """
     logger.info(
         '%s cases and %s controls observed in the data set.',
         vds.query_samples('samples.map(s => sa.pheno.isCase).map(x => x.toInt()).sum()'),
@@ -21,6 +27,12 @@ def log_case_count(vds):
     )
     
 def log_sex_count(vds):
+    """Log male and female counts in VariantDataset.
+    
+    Parameters
+    ----------
+    vds : Variant Data Set format from Hail.
+    """ 
     logger.info(
         '%s females and %s males observed in the data set.',
         vds.query_samples('samples.map(s => sa.pheno.isFemale).map(x => x.toInt()).sum()'),
@@ -28,6 +40,22 @@ def log_sex_count(vds):
     )
 
 def exact_keytable(vds, test = 'fisher', minCellCount = 5):
+    """Calculates case-control counts for each variant and a P-value using the exact test or Chi-sq test.
+    
+    Parameters
+    ----------
+    vds : TYPE
+        Description
+    test : str, optional
+        'fisher', 'ctt', or 'both' depending method to be used.
+    minCellCount : int, optional
+        Minimum cell counts before Chi-sq test is used over the Exact test.
+    
+    Returns
+    -------
+    VariantDataset
+        Annotated with va.exact in the variant schema.
+    """
     logger.info('Annotate variants with counts.')
     vds = vds.annotate_variants_expr(
         [

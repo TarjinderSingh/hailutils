@@ -136,7 +136,7 @@ def genotype_filter_expr(
     return(expr)
 
 def sex_aware_genotype_filter_expr(
-    isFemale = 'sa.pheno.isFemale', 
+    isFemale = 'sa.isFemale', 
     minDP = 10, minDP_male_PAR = 5, 
     homrefAB = 0.1, minhetAB = 0.25,
     minhomrefGQ = 20, minSNPGQ = 20, minindelGQ = 20):
