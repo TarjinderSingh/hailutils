@@ -171,3 +171,13 @@ def write_read_vds(vds, tmpdir = 'gs://tsingh'):
     vds.write(path)
     logger.info('Read VDS back into memory.')
     return(vds.hc.read(path))
+
+def variants_table(vds, cols = None, flatten = True, variant_string = True):
+    kt = vds.variants_table()
+    if flatten:
+        kt = kt.flatten()
+    if variant_string:
+        kt = kt.annotate('v = str(v)')
+    if cols:
+        kt = kt.select(cols)
+    return(kt)

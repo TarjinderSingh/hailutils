@@ -48,6 +48,24 @@ def allele_metrics_exprs2(root = "va.metrics", sample_filt_expr = ""):
 def sex_aware_allele_metrics_exprs2(root = "va.metrics", root_m = "va.metrics.male", root_f = "va.metrics.female"):
     exprs = [
         '''
+        {root}.nCalled = 
+            if (! v.inYNonPar())
+                {root_m}.nCalled + {root_f}.nCalled
+            else if (v.inYNonPar())
+                {root_m}.nCalled
+            else
+                NA: Float
+        ''',
+        '''
+        {root}.nSample = 
+            if (! v.inYNonPar())
+                {root_m}.nSample + {root_f}.nSample
+            else if (v.inYNonPar())
+                {root_m}.nSample
+            else
+                NA: Float
+        ''',
+        '''
         {root}.callRate = 
             if (! v.inYNonPar())
                 ({root_m}.nCalled + {root_f}.nCalled)/({root_m}.nSample + {root_f}.nSample)
@@ -79,7 +97,10 @@ def sex_aware_allele_metrics_exprs2(root = "va.metrics", root_m = "va.metrics.ma
                 NA: Int
         '''
     ]
-    return([ x.format(root = root, root_m = root_m, root_f = root_f) for x in exprs ])    
+    return([ x.format(root = root, root_m = root_m, root_f = root_f) for x in exprs ])
+
+def remove_sex_aware_allele_metrics_expr(root = "va.metrics"):
+    return('{0} = drop({0}, male, female)'.format(root))
 
 def annotate_sex_aware_allele_metrics(vds, root = 'va.metrics', sex_boolean = 'sa.isFemale', hardcall = True):
     logger.info('Calculate and annotate with sex-aware variant metrics.')
