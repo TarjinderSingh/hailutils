@@ -183,7 +183,30 @@ def annotate_csq2(kt, csq_col = 'va.ann.canonical.csq'):
     expr = 'csq2 = if (isDefined(`va.mpc.MPC`) && `va.mpc.MPC` >= 2) "mis2" else `{}`'.format(csq_col)
     return(kt.annotate(expr))
 
-def sample_burden(kt, sample_col = 's', phe_col = 'sa.isCase', group_col = 'va.ann.canonical.gene_id', batch_col = None, csq_col = 'csq2', func = 'binary'):
+def annotate_csq_mpc(kt, new_col = 'csq2', csq_col = 'va.ann.canonical.csq', mpc_col = 'va.mpc.MPC'):
+    expr = '''
+    {0} = 
+        if (isDefined(`{1}`) && `{1}` >= 3 && `{2}` == "mis") 
+            "mis3"
+        else if (isDefined(`{1}`) && `{1}` >= 2 && `{2}` == "mis") 
+            "mis2"
+        else if (isDefined(`{1}`) && `{1}` >= 1.5 && `{2}` == "mis") 
+            "mis15"
+        else if (isDefined(`{1}`) && `{1}` >= 1 && `{2}` == "mis") 
+            "mis1"    
+        else 
+            `{2}`
+    '''.format(new_col, mpc_col, csq_col)
+    return(kt.annotate(expr))
+
+def annotate_analysis_consequences(kt):
+    kt = annotate_csq_mpc(kt, new_col = 'csq_canonical', csq_col = 'va.ann.canonical.csq')
+    return(annotate_csq_mpc(kt, new_col = 'csq_basic', csq_col = 'va.ann.basic.csq'))
+
+def convert_startlost_to_mis(kt, new_col = 'csq2', csq_col = 'va.ann.canonical.csq'):
+    return(kt.annotate('{0} = if (isDefined(`{1}`) && `{1}` == "startlost") "mis" else `{1}`'.format(new_col, csq_col)))
+
+def sample_burden(kt, sample_col = 's', phe_col = 'sa.isCase', group_col = 'va.ann.canonical.gene_id', batch_list = None, csq_col = 'csq2', func = 'binary'):
     '''
     fun: binary or sum
     '''
@@ -202,8 +225,8 @@ def sample_burden(kt, sample_col = 's', phe_col = 'sa.isCase', group_col = 'va.a
         'csq = `{}`'.format(csq_col)
     ]
     
-    if batch_col: 
-        keys_expr.append('batch = `{}`'.format(batch_col))
+    if batch_list: 
+        keys_expr.extend([ '`{0}` = `{0}`'.format(b) for b in batch_list ])
     
     return(kt.aggregate_by_key(keys_expr, agg_expr))
 

@@ -181,3 +181,28 @@ def variants_table(vds, cols = None, flatten = True, variant_string = True):
     if cols:
         kt = kt.select(cols)
     return(kt)
+
+def get_ann_type(annotation, schema, root = 'va'):
+    return get_ann_field(annotation, schema, root).typ
+
+def get_ann_field(annotation, schema, root='va'):
+    anns = flatten_struct(schema, root, leaf_only=False)
+    if not annotation in anns:
+        logger.error("%s missing from schema.", annotation)
+        sys.exit(1)
+    return anns[annotation]
+
+def flatten_struct(struct, root ='', leaf_only = True):
+    result = {}
+    for f in struct.fields:
+        path = '%s.%s' % (root, f.name)
+        if isinstance(f.typ, TStruct):
+            result.update(flatten_struct(f.typ, path))
+            if not leaf_only:
+                result[path] = f
+        else:
+            result[path] = f
+    return result
+
+def get_variant_schema_names(vds):
+    return(sorted(flatten_struct(vds.variant_schema, root = 'va').keys()))
