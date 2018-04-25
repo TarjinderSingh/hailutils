@@ -183,6 +183,23 @@ def annotate_csq2(kt, csq_col = 'va.ann.canonical.csq'):
     expr = 'csq2 = if (isDefined(`va.mpc.MPC`) && `va.mpc.MPC` >= 2) "mis2" else `{}`'.format(csq_col)
     return(kt.annotate(expr))
 
+def annotate_csq_loftee(kt, new_col = 'csq2', csq_col = 'va.ann.canonical.csq', loftee_col = 'va.ann.canonical.loftee'):
+    expr = '''
+    {0} = 
+        if (isDefined(`{1}`) && `{1}` == "HC") 
+            "lofHC"
+        else 
+            `{2}`
+    '''.format(new_col, loftee_col, csq_col)
+    return(kt.annotate(expr))
+
+def annotate_analysis_consequences(kt):
+    kt = annotate_csq_mpc(kt, new_col = 'csq_canonical', csq_col = 'va.ann.canonical.csq')
+    kt = annotate_csq_loftee(kt, new_col = 'csq_canonical', csq_col = 'csq_canonical', loftee_col = 'va.ann.canonical.loftee')
+    kt = annotate_csq_mpc(kt, new_col = 'csq_basic', csq_col = 'va.ann.basic.csq')
+    kt = annotate_csq_loftee(kt, new_col = 'csq_basic', csq_col = 'csq_basic', loftee_col = 'va.ann.basic.loftee')
+    return(kt)
+
 def annotate_csq_mpc(kt, new_col = 'csq2', csq_col = 'va.ann.canonical.csq', mpc_col = 'va.mpc.MPC'):
     expr = '''
     {0} = 

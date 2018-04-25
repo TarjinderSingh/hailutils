@@ -28,6 +28,23 @@ def annotate_geneset(vds, name, gene_ids = None, gene_key = 'va.ann.canonical.ge
     )
     return(vds)
 
+def annotate_genesets_dict(vds, geneset_dict, gene_key = 'va.ann.canonical.gene_id', ann_label = 'canonical'):
+    for key in geneset_dict:
+        vds = vds.annotate_global('global.{}'.format(key), geneset_dict[key], TSet(TString()))
+    exprs = [
+                '''
+                va.genesets.{0}.{1} = 
+                    if (! {2}.filter(x => global.{1}.contains(x)).isEmpty())
+                        true
+                    else
+                        false
+                '''.format('canonical', key, 'va.ann.canonical.gene_id')
+                for key in geneset_dict
+        
+    ]
+    vds = vds.annotate_variants_expr(exprs)
+    return(vds)
+
 def annotate_nonpsych_lof_intolerant_genes(vds, gene_key = 'va.ann.canonical.gene_id', ann_label = 'canonical'):
     gene_ids = (
         vds.hc
