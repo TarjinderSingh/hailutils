@@ -425,6 +425,7 @@ def parse_vep_transcript_consequences(vds):
                                         NA: String,
                                 gene_id: x.gene_id,
                                 aachange: x.hgvsp,
+                                cdchange: x.hgvsc,
                                 lof: x.lof,
                                 lof_filter: x.lof_filter,
                                 lof_flags: x.lof_flags,
@@ -524,6 +525,13 @@ def parse_canonical_transcript_consequences(vds):
         {0}.aachange = 
             if (isDefined({0}.minscore))
                 {0}.min_tcsq.map(tc => tc.aachange).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
+        {0}.cdchange = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.cdchange).toSet()
             else
                 NA: Set[String]
         '''
@@ -639,6 +647,13 @@ def parse_selected_transcript_consequences(vds, transcript_ids, name):
         ''',
         '''
         {0}.aachange = 
+            if (isDefined({0}.minscore))
+                {0}.min_tcsq.map(tc => tc.aachange).toSet()
+            else
+                NA: Set[String]
+        ''',
+        '''
+        {0}.cdchange = 
             if (isDefined({0}.minscore))
                 {0}.min_tcsq.map(tc => tc.aachange).toSet()
             else
