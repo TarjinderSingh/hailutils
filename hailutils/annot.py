@@ -152,6 +152,8 @@ SO = ['transcript_ablation', # HIGH 0
       'feature_truncation',
       'intergenic_variant']
 
+so_dict = { s: i for i, s in enumerate(SO) }
+min_dict = { i: val for i, val in enumerate(SO) }
 
 def run_vep_pipeline(vds):
     logger.info('Annotating with VEP.')
@@ -238,9 +240,8 @@ def annotate_vep_global(vds):
     vds = vds.annotate_global('global.csqs', csqs, TArray(TString()))
 
     logger.info('Annotate with sequence ontology map (essential for parse_vep).')
-    so_dict = { s: i for i, s in enumerate(SO) }
     vds = vds.annotate_global('global.somap', so_dict, TDict(TString(), TInt()))
-    
+    vds = vds.annotate_global('global.minmap', min_dict, TDict(TInt(), TString()))
     return(vds)
 
 def parse_vep(vds):
@@ -446,29 +447,11 @@ def parse_vep_transcript_consequences(vds):
             )
     )
 
-def parse_canonical_transcript_consequences(vds):
-    logger.info(
-        'Determine minscores of canonical transcripts and all coding transcripts '
-        'and identify all corresponding transcripts with those minscore values.'
-    )
-               
-    vds = (
-        vds
-            .annotate_variants_expr(
-                '''
-                va.ann.canonical.minscore = va.tcsq.filter(tc => tc.canonical).map(tc => tc.minscore).min(),
-                va.ann.all.minscore = va.tcsq.map(tc => tc.minscore).min()
-                '''
-            )
-            .annotate_variants_expr(
-                '''
-                va.ann.canonical.min_tcsq = va.tcsq.filter(tc => tc.canonical && tc.minscore == va.ann.canonical.minscore),
-                va.ann.all.min_tcsq = va.tcsq.filter(tc => tc.minscore == va.ann.all.minscore)
-                '''
-            )
-    )
-    
-    logger.info('Annotate the genes and predicted consequences of all minscore transcripts.')
+def parse_transcript_consequences(vds, anns = [ 'va.ann.canonical', 'va.ann.all' ]):
+    '''
+    Annotates both canonical and all consequences.
+    '''  
+    logger.info('Annotate variants with the genes and predicted consequences of all minscore transcripts.')
     exprs = [
         '''
         {0}.gene_id = 
@@ -488,6 +471,13 @@ def parse_canonical_transcript_consequences(vds):
         {0}.csq = 
             if (isDefined({0}.minscore))
                 {0}.min_tcsq.map(tc => tc.csq).toSet().head()
+            else
+                NA: String
+        ''',
+        '''
+        {0}.minterm = 
+            if (isDefined({0}.minscore))
+                global.minmap[{0}.minscore]
             else
                 NA: String
         ''',
@@ -536,30 +526,85 @@ def parse_canonical_transcript_consequences(vds):
                 NA: Set[String]
         '''
     ] 
-    vds = vds.annotate_variants_expr(
-        [ expr.format(ann) for expr in exprs for ann in [ 'va.ann.canonical', 'va.ann.all' ] ]
-    )
+    vds = vds.annotate_variants_expr([ expr.format(ann) for expr in exprs for ann in anns ])
     
-    logger.info('Annotate variant with all transcripts with lowest minscore values.')
-    vds = vds.annotate_variants_expr(
+    logger.info('Annotate variants with transcript-specific dictionaries.')
+    exprs = [
         '''
-        va.ann.all.transcript_ids = 
+        {0}.transcript_dict = 
             let gene2transcripts_structlist = 
-                va.ann.all.gene_id.toArray()
+                {0}.gene_id.toArray()
                     .map(
-                        x => {
+                        x => {{
                             gene_id: x, 
-                            transcript_ids: va.ann.all.min_tcsq
+                            transcript_ids: {0}.min_tcsq
                                 .filter(tc => tc.gene_id == x)
                                 .map(tc => tc.transcript_id)
                                 .toSet()
                                 .toArray()
-                             }
+                             }}
                     ) in 
                 index(gene2transcripts_structlist, gene_id)
                     .mapValues(x => x.transcript_ids)
+        ''',
         '''
+        {0}.aachange_dict = 
+            let transcripts_structlist = 
+                {0}.min_tcsq
+                    .map(
+                        tc => {{
+                            transcript_id: tc.transcript_id, 
+                            aachange: tc.aachange.split(":")[1]
+                        }}
+                    )
+                    .filter(x => isDefined(x.aachange)) in
+                index(transcripts_structlist, transcript_id)
+                    .mapValues(x => x.aachange)
+        ''',
+        '''
+        {0}.cdchange_dict = 
+            let transcripts_structlist = 
+                {0}.min_tcsq
+                    .map(
+                        tc => {{
+                            transcript_id: tc.transcript_id, 
+                            cdchange: tc.cdchange.split(":")[1]
+                        }}
+                    ) 
+                    .filter(x => isDefined(x.cdchange)) in 
+                index(transcripts_structlist, transcript_id)
+                    .mapValues(x => x.cdchange)
+        '''
+    ]
+    vds = vds.annotate_variants_expr([ expr.format(ann) for expr in exprs for ann in anns ])
+    return(vds)
+
+def parse_canonical_transcript_consequences(vds):
+    '''
+    Annotates both canonical and all consequences.
+    '''
+    logger.info(
+        'Determine minscores of canonical transcripts and all coding transcripts '
+        'and identify all corresponding transcripts with those minscore values.'
     )
+               
+    vds = (
+        vds
+            .annotate_variants_expr(
+                '''
+                va.ann.canonical.minscore = va.tcsq.filter(tc => tc.canonical).map(tc => tc.minscore).min(),
+                va.ann.all.minscore = va.tcsq.map(tc => tc.minscore).min()
+                '''
+            )
+            .annotate_variants_expr(
+                '''
+                va.ann.canonical.min_tcsq = va.tcsq.filter(tc => tc.canonical && tc.minscore == va.ann.canonical.minscore),
+                va.ann.all.min_tcsq = va.tcsq.filter(tc => tc.minscore == va.ann.all.minscore)
+                '''
+            )
+    )
+    
+    vds = parse_transcript_consequences(vds, anns = [ 'va.ann.canonical', 'va.ann.all' ])
     return(vds)
 
 def parse_selected_transcript_consequences(vds, transcript_ids, name):
@@ -592,75 +637,7 @@ def parse_selected_transcript_consequences(vds, transcript_ids, name):
             )
     )
     
-    logger.info('Annotate the genes and predicted consequences of all minscore transcripts.')
-    exprs = [
-        '''
-        {0}.gene_id = 
-            if (isDefined({0}.minscore))
-                {0}.min_tcsq.map(tc => tc.gene_id).toSet()
-            else
-                NA: Set[String]
-        ''',
-        '''
-        {0}.transcript_id = 
-            if (isDefined({0}.minscore))
-                {0}.min_tcsq.map(tc => tc.transcript_id).toSet()
-            else
-                NA: Set[String]
-        ''',
-        '''
-        {0}.csq = 
-            if (isDefined({0}.minscore))
-                {0}.min_tcsq.map(tc => tc.csq).toSet().head()
-            else
-                NA: String
-        ''',
-        '''
-        {0}.loftee = 
-            if (isDefined({0}.minscore))
-                let loftee = {0}.min_tcsq.map(tc => tc.loftee).toSet() in
-                if (loftee.contains("HC"))
-                    "HC"
-                else if (loftee.contains("HCflagged"))
-                    "HCflagged"
-                else if (loftee.contains("LC"))
-                    "LC"
-                else 
-                    NA: String
-            else
-                NA: String
-        ''',
-        '''
-        {0}.polyphen = 
-            if (isDefined({0}.minscore))
-                let loftee = {0}.min_tcsq.map(tc => tc.polyphen).toSet() in
-                if (loftee.contains("probably_damaging"))
-                    "D"
-                else if (loftee.contains("possibly_damaging"))
-                    "P"
-                else if (loftee.contains("benign"))
-                    "B"
-                else 
-                    NA: String
-            else
-                NA: String
-        ''',
-        '''
-        {0}.aachange = 
-            if (isDefined({0}.minscore))
-                {0}.min_tcsq.map(tc => tc.aachange).toSet()
-            else
-                NA: Set[String]
-        ''',
-        '''
-        {0}.cdchange = 
-            if (isDefined({0}.minscore))
-                {0}.min_tcsq.map(tc => tc.aachange).toSet()
-            else
-                NA: Set[String]
-        '''
-    ] 
-    vds = vds.annotate_variants_expr([ expr.format('va.ann.{}'.format(name)) for expr in exprs  ])
+    vds = parse_transcript_consequences(vds, anns = [ 'va.ann.{}'.format(name) ])
     return(vds)
 
 def parse_basic_transcript_consequences(vds):
@@ -975,3 +952,104 @@ def get_annotation_table(
         logger.info('Explode gene column.')
         kt = kt.explode('gene_id')
     return(kt)
+
+def read_gene_kt():
+    import pandas as pd
+    df = pd.read_table(hadoop_read('gs://exome-qc/resources/gencode_v19/canonical-transcripts-annotated-from-biomart-processed.tsv'))
+    df = df.loc[df.gene_name.notnull(), ['gene_id', 'gene_name', 'gene_description']].drop_duplicates().sort_values('gene_id')
+    return(KeyTable.from_pandas(df))
+
+def get_detailed_annotations_table_split_by_gene(avds, keep_cols = ['va.cadd13.phred', 'va.mpc.MPC']):
+    avds = avds.annotate_variants_expr('va = select(va, ann, mpc, cadd13), va.ann = select(va.ann, canonical, all)')
+    cols = [ 'v' ] + keep_cols + [ 
+        'va.ann.{}.{}'.format(ann, col) 
+        for ann in [ 'canonical', 'all' ] 
+        for col in [ 
+            'gene_id',  'minscore', 'minterm', 
+            'csq', 'loftee', 'polyphen', 
+            'transcript_id', 'transcript_dict',
+            'aachange', 'cdchange', 'aachange_dict', 'cdchange_dict' 
+        ]
+    ]
+    logger.info('Get annotation keytable.')
+    kt = variants_table(avds, cols = cols)
+    logger.info('Explode by gene and annotate with all and canonical transcript ids.')
+    kt = (
+        kt
+            .explode('va.ann.all.gene_id')
+            .annotate(
+                '''
+                `va.ann.all.transcript_id` = `va.ann.all.transcript_dict`.get(`va.ann.all.gene_id`),
+                `va.ann.canonical.transcript_id` = `va.ann.canonical.transcript_dict`.get(`va.ann.all.gene_id`)
+                '''
+            )
+    )
+    logger.info('Annotate with canonical gene ID.')
+    kt = (
+        kt
+            .annotate(
+                '''
+                `va.ann.canonical.gene_id` =
+                    if (isDefined(`va.ann.canonical.transcript_id`))
+                        `va.ann.all.gene_id`
+                    else
+                        NA: String
+                '''
+            )
+    
+    )
+    
+    logger.info('Annotate with amino acid and coding changes.')
+    exprs = [
+        '''
+        `va.ann.{0}.aachange` = 
+                    if (! `va.ann.{0}.aachange_dict`.isEmpty())
+                        `va.ann.{0}.transcript_id`
+                            .map(x => [ x, `va.ann.{0}.aachange_dict`.get(x) ].mkString(":"))
+                            .mkString(",")
+                    else
+                        NA: String,
+        `va.ann.{0}.cdchange` = 
+            if (! `va.ann.{0}.cdchange_dict`.isEmpty())
+                `va.ann.{0}.transcript_id`
+                    .map(x => [ x, `va.ann.{0}.cdchange_dict`.get(x) ].mkString(":"))
+                    .mkString(",")
+            else
+                NA: String
+        '''.format(ann)
+        for ann in [ 'all', 'canonical' ]
+    ]
+    kt = kt.annotate(exprs)
+
+    logger.info('Convert transcript_id list and canonical transcript_id list to string.')
+    kt = (
+        kt
+            .annotate(
+                [ '`va.ann.{0}.transcript_id` = `va.ann.{0}.transcript_id`.mkString(",")'.format(ann) for ann in [ 'all', 'canonical' ] ]
+            )
+    )
+    return(kt)
+
+def export_pandas_detailed_annotations_split_by_gene(akt):
+    logger.info('Create a Pandas dataframe with annotations.')
+    return(
+        akt
+            .select([
+                'v', 
+                'gene_name', 
+                'va.ann.all.gene_id',
+                'va.ann.canonical.gene_id',
+                'va.ann.all.minscore', 
+                'va.ann.all.minterm',
+                'va.ann.canonical.minterm',
+                'va.ann.all.transcript_id',
+                'va.ann.canonical.transcript_id',
+                'va.ann.all.aachange_dict', 
+                'va.ann.all.cdchange_dict', 
+                'va.ann.all.aachange',
+                'va.ann.all.cdchange',
+                'va.ann.canonical.aachange',
+                'va.ann.canonical.cdchange'
+            ]
+        ).to_pandas()
+    )
