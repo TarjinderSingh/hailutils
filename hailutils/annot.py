@@ -953,14 +953,15 @@ def get_annotation_table(
         kt = kt.explode('gene_id')
     return(kt)
 
-def read_gene_kt():
+def read_gene_kt(cloud = True):
     import pandas as pd
-    df = pd.read_table(hadoop_read('gs://exome-qc/resources/gencode_v19/canonical-transcripts-annotated-from-biomart-processed.tsv'))
+    path = 'gs://exome-qc/resources/gencode_v19/canonical-transcripts-annotated-from-biomart-processed.tsv' if cloud else '/Users/tsingh/repos/elegantplot/inst/extdata/canonical-transcripts-annotated-from-biomart-processed.tsv'
+    df = pd.read_table(hadoop_read(path))
     df = df.loc[df.gene_name.notnull(), ['gene_id', 'gene_name', 'gene_description']].drop_duplicates().sort_values('gene_id')
     return(KeyTable.from_pandas(df))
 
 def get_detailed_annotations_table_split_by_gene(avds, keep_cols = ['va.cadd13.phred', 'va.mpc.MPC']):
-    avds = avds.annotate_variants_expr('va = select(va, ann, mpc, cadd13), va.ann = select(va.ann, canonical, all)')
+    #avds = avds.annotate_variants_expr('va = select(va, ann, mpc, cadd13), va.ann = select(va.ann, canonical, all)')
     cols = [ 'v' ] + keep_cols + [ 
         'va.ann.{}.{}'.format(ann, col) 
         for ann in [ 'canonical', 'all' ] 
@@ -1030,26 +1031,17 @@ def get_detailed_annotations_table_split_by_gene(avds, keep_cols = ['va.cadd13.p
     )
     return(kt)
 
-def export_pandas_detailed_annotations_split_by_gene(akt):
-    logger.info('Create a Pandas dataframe with annotations.')
-    return(
-        akt
-            .select([
-                'v', 
-                'gene_name', 
-                'va.ann.all.gene_id',
-                'va.ann.canonical.gene_id',
-                'va.ann.all.minscore', 
-                'va.ann.all.minterm',
-                'va.ann.canonical.minterm',
-                'va.ann.all.transcript_id',
-                'va.ann.canonical.transcript_id',
-                'va.ann.all.aachange_dict', 
-                'va.ann.all.cdchange_dict', 
-                'va.ann.all.aachange',
-                'va.ann.all.cdchange',
-                'va.ann.canonical.aachange',
-                'va.ann.canonical.cdchange'
-            ]
-        ).to_pandas()
-    )
+def annotate_detailed_annotations_table_with_gene_name(akt, cloud = True):
+    logger.info('Annotate table with gene name.')
+    gkt = read_gene_kt(cloud)
+    return(akt.key_by('va.ann.all.gene_id').join(gkt.key_by('gene_id'), how = 'left'))
+
+def select_columns_detailed_annotations_split_by_gene(akt, keep_cols = [ 'va.cadd13.phred', 'va.mpc.MPC' ]):
+    logger.info('Select detailed annotations in KeyTable.')
+    keep_cols = [ 'v' , 'gene_name' ] + \
+        [ 
+            'va.ann.{}.{}'.format(ann, col) 
+            for ann in ['all', 'canonical' ] 
+            for col in [ 'gene_id', 'minscore', 'minterm', 'transcript_id', 'aachange', 'cdchange', 'csq', 'polyphen', 'loftee'] 
+        ] + keep_cols
+    return(akt.select(keep_cols))
