@@ -38,7 +38,7 @@ def annotate_genesets_dict(vds, geneset_dict, gene_key = 'va.ann.canonical.gene_
                         true
                     else
                         false
-                '''.format('canonical', key, 'va.ann.canonical.gene_id')
+                '''.format(ann_label, key, gene_key)
                 for key in geneset_dict
         
     ]

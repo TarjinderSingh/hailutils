@@ -198,6 +198,8 @@ def annotate_analysis_consequences(kt):
     kt = annotate_csq_loftee(kt, new_col = 'csq_canonical', csq_col = 'csq_canonical', loftee_col = 'va.ann.canonical.loftee')
     kt = annotate_csq_mpc(kt, new_col = 'csq_basic', csq_col = 'va.ann.basic.csq')
     kt = annotate_csq_loftee(kt, new_col = 'csq_basic', csq_col = 'csq_basic', loftee_col = 'va.ann.basic.loftee')
+    kt = annotate_csq_mpc(kt, new_col = 'csq_all', csq_col = 'va.ann.all.csq')
+    kt = annotate_csq_loftee(kt, new_col = 'csq_all', csq_col = 'csq_all', loftee_col = 'va.ann.all.loftee')    
     return(kt)
 
 def annotate_csq_mpc(kt, new_col = 'csq2', csq_col = 'va.ann.canonical.csq', mpc_col = 'va.mpc.MPC'):
