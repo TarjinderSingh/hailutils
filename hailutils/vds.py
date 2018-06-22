@@ -206,3 +206,12 @@ def flatten_struct(struct, root ='', leaf_only = True):
 
 def get_variant_schema_names(vds):
     return(sorted(flatten_struct(vds.variant_schema, root = 'va').keys()))
+
+def join_vds(vds_list):
+    return(reduce(lambda x, y: x.join(y), vds_list))
+
+def drop_all_annotations(vds):
+    return(vds.annotate_variants_expr('va = {{}}'))
+
+def annotate_variants_vds(vds, avds):
+    return(vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)'))

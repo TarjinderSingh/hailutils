@@ -847,6 +847,33 @@ def get_maskext_keytable():
             'gs://sczmeta_exomes/data/coverage/release_v1.5/high_confidence_regions_extended_10x80_20170910.bed')
     )
 
+def annotate_well_covered_regions(vds, cloud = True):
+    logger.info('Read well-covered regions for annotation.')
+    path = 'gs://sczmeta_exomes/data/coverage/release_v2.0/2018-05-18_schema-high-confidence-regions.bed' if cloud else 'file:///psych/genetics_data/tsingh/projects/sczexomes/coverage/release_v2.0/2018-05-18_schema-high-confidence-regions.bed'
+    rkt = KeyTable.import_bed(path)
+
+    # List of coverage masks to apply on data
+    coverage_list = [
+        'all_cds_extended_consensus_regions_3',
+        'all_cds_extended_consensus_regions_strict',
+        'agilent_v2_cds_extended_consensus_regions_strict',  
+        'agilent_v2_cds_extended_consensus_regions_3',
+        'danish_cds_extended_consensus_regions_strict',
+        'non_nextera_cds_extended_consensus_regions_strict',
+        'non_nextera_cds_extended_consensus_regions_3',
+        'nextera_cds_extended_consensus_regions_strict',
+        'nextera_cds_extended_consensus_regions_3',
+        'all_high_qual_cds_extended_consensus_regions_strict',
+        'all_high_qual_cds_extended_consensus_regions_3'
+    ]
+
+    logger.info('Annotate VDS with coverage regions.')
+    for c in coverage_list:
+        logger.info('Annotate VDS with the following mask: %s', c)
+        intervals = rkt.filter('target == "{}"'.format(c)).drop('target')
+        vds = vds.annotate_variants_table(intervals, root = 'va.hcrs.{}'.format(c))
+    return(vds)
+
 def get_exome_called_keytable():
     return(
         KeyTable.import_bed('gs://sczmeta_exomes/data/regions/exome_calling_regions.merged.v1.bed')
@@ -896,6 +923,155 @@ def annotate_dbsnp(vds, version = 'hg19'):
     vds = vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)')
     return(vds)
 
+def annotate_dbNSFP(vds):
+    logger.info("Annotate with annotations from dbNSFP using Hail's annotation DB.")
+    return(
+        vds
+            .annotate_variants_db([
+                'va.gencode19.exonsc',
+                'va.gencode19.exonsa',
+                'va.discovEHR.AF',
+                'va.cadd.PHRED',
+                'va.cadd.RawScore',
+                'va.dann.score',
+                'va.eigen.PC_phred',
+                'va.eigen.PC_raw',
+                'va.eigen.phred',
+                'va.eigen.raw',
+                'va.dbNSFP.Ensembl_geneid',
+                'va.dbNSFP.Ensembl_transcriptid',
+                'va.dbNSFP.GERP_RS',
+                'va.dbNSFP.GERP_RS_rankscore',
+                'va.dbNSFP.LRT_converted_rankscore',
+                'va.dbNSFP.LRT_omega',
+                'va.dbNSFP.LRT_pred',
+                'va.dbNSFP.LRT_score',
+                'va.dbNSFP.MCAP_pred',
+                'va.dbNSFP.MCAP_rankscore',
+                'va.dbNSFP.MCAP_score',
+                'va.dbNSFP.MetaSVM_pred',
+                'va.dbNSFP.MetaSVM_rankscore',
+                'va.dbNSFP.MetaSVM_score',
+                'va.dbNSFP.MutationAssessor_pred',
+                'va.dbNSFP.MutationAssessor_rankscore',
+                'va.dbNSFP.MutationAssessor_score',
+                'va.dbNSFP.MutationTaster_converted_rankscore',
+                'va.dbNSFP.MutationTaster_pred',
+                'va.dbNSFP.MutationTaster_score',
+                'va.dbNSFP.PROVEAN_converted_rankscore',
+                'va.dbNSFP.PROVEAN_pred',
+                'va.dbNSFP.PROVEAN_score',
+                'va.dbNSFP.Polyphen2_HDIV_pred',
+                'va.dbNSFP.Polyphen2_HDIV_rankscore',
+                'va.dbNSFP.Polyphen2_HDIV_score',
+                'va.dbNSFP.Polyphen2_HVAR_pred',
+                'va.dbNSFP.Polyphen2_HVAR_rankscore',
+                'va.dbNSFP.Polyphen2_HVAR_score',
+                'va.dbNSFP.SIFT_converted_rankscore',
+                'va.dbNSFP.SIFT_pred',
+                'va.dbNSFP.SIFT_score',
+                'va.dbNSFP.REVEL_rankscore',
+                'va.dbNSFP.REVEL_score',
+                'va.dbNSFP.MutPred_rankscore',
+                'va.dbNSFP.MutPred_score',
+                'va.dbNSFP.MutPred_top5features',
+                'va.dbNSFP.MetaSVM_pred',
+                'va.dbNSFP.MetaSVM_rankscore',
+                'va.dbNSFP.MetaSVM_score',
+                'va.dbNSFP.MetaLR_pred',
+                'va.dbNSFP.MetaLR_rankscore',
+                'va.dbNSFP.MetaLR_score',
+                'va.dbNSFP.VEST3_rankscore',
+                'va.dbNSFP.VEST3_score'
+            ])
+    )
+
+def annotate_dbNSFP_ensemble_missense_classifiers(vds):
+    logger.info('Rename dbNSFP columns.')
+    vds = (
+        vds
+            .annotate_variants_expr(
+                """
+                va.dbNSFP.Eigen_raw = va.eigen.raw,
+                va.dbNSFP.Eigen_phred = va.eigen.phred,
+                va.dbNSFP.Eigen_PC_raw = va.eigen.PC_raw,
+                va.dbNSFP.Eigen_PC_phred = va.eigen.PC_phred,
+                va.dbNSFP.DANN_score = va.dann.score,
+                va.dbNSFP.discovEHR_AF = va.discovEHR.AF,
+                va.dbNSFP.CADD_raw = va.cadd.RawScore,
+                va.dbNSFP.CADD_phred = va.cadd.PHRED
+                """
+            )
+            .annotate_variants_expr('va = drop(va, eigen, dann, discovEHR, cadd)')
+    )
+
+    logger.info('Annotate with classic ensemble missense classifiers.')
+
+    ensemble_dict = {
+        'SIFT_pred': 'D',
+        'PROVEAN_pred': 'D',
+        'Polyphen2_HVAR_pred': 'D',
+        'Polyphen2_HDIV_pred': 'D',
+        'LRT_pred': 'D',
+        'MutationAssessor_pred': '[HM]',
+        'MutationTaster_pred': '[AD]'
+    }
+
+    expr = [ '("{}" ~ va.dbNSFP.{}).toInt()'.format(value, key) for key, value in ensemble_dict.items() ]
+    expr = 'va.missense_classifiers.classic_seven = ' + ' + '.join(expr)
+    vds = vds.annotate_variants_expr(expr)
+
+    logger.info('Modify MutationTaster_score to correspond with MutationTaster_pred.')
+    vds = vds.annotate_variants_expr('va.dbNSFP.MutationTaster_score2 = ("[AD]" ~ va.dbNSFP.MutationTaster_pred).toInt()')
+
+    logger.info('Annotate with newer ensemble missense classifiers.')
+
+    threshold_dict = {
+        'MutationTaster_score2': '> 0.5',
+        'CADD_phred': '>= 20',
+        'MCAP_score': '>= 0.025',
+        'VEST3_score': '>= 0.8',
+        'REVEL_score': '> 0.5',
+        'MetaSVM_score': '> 0',
+        'Eigen_raw': '> 0.29',
+        'Polyphen2_HVAR_score': '> 0.447'
+    }
+
+    ensemble_dict = {
+       'pathogenic_three': [ 'MutationTaster_score2', 'CADD_phred', 'MCAP_score'],
+       'benign_three': [ 'VEST3_score', 'REVEL_score', 'MetaSVM_score' ],
+       'pathogenic_four': [ 'MutationTaster_score2', 'CADD_phred', 'MCAP_score', 'REVEL_score' ],
+       'benign_five': [ 'VEST3_score', 'REVEL_score', 'MetaSVM_score', 'Polyphen2_HVAR_score', 'Eigen_raw' ],
+       'combined_seven': [  'MutationTaster_score2', 'CADD_phred', 'MCAP_score', 'VEST3_score', 'REVEL_score', 'MetaSVM_score', 'Eigen_raw' ]
+    }
+
+    # 'CADD_phred' and 'Eigen_raw' are double; the remaining classifiers are strings with missing values (".") or split values ";"
+    # 'Polyphen2_HVAR_score' and 'MutationTaster_score' have ';' in their strings
+    exprs = []
+    logger.info('Convert string scores to double.')
+    for key in [ 'REVEL_score', 'VEST3_score', 'Polyphen2_HVAR_score', 'MetaSVM_score', 'MCAP_score', 'MutationTaster_score' ]: 
+        exprs.append(
+            '''
+            va.dbNSFP.{0} = 
+                if (";" ~ va.dbNSFP.{0})
+                      va.dbNSFP.{0}.split(";").filter(x => x != ".").map(x => x.toDouble()).max()
+                else if (va.dbNSFP.{0} != ".") 
+                    va.dbNSFP.{0}.toDouble() 
+                else 
+                    NA: Double
+            '''.format(key)
+        )
+    vds = vds.annotate_variants_expr(exprs)
+
+    exprs = []
+    logger.info('Annotate with ensemble missense classifiers.')
+    for key in ensemble_dict:
+        classifiers = ensemble_dict[key]
+        expr = [ '(va.dbNSFP.' + c + ' ' + threshold_dict[c] + ').toInt()' for c in classifiers ]
+        exprs.append('va.missense_classifiers.{} = '.format(key) + ' + '.join(expr))
+    vds = vds.annotate_variants_expr(exprs)
+    return(vds)
+
 def run_current_annotation_pipeline(vds):
     vds = run_vep_pipeline2(vds)
     vds = parse_basic_transcript_consequences(vds)
@@ -919,10 +1095,25 @@ def run_current_annotation_pipeline(vds):
     # dbSNP
     vds = annotate_dbsnp(vds)
 
-    # Annotate with LoF intolerance
-    # vds = annotate_nonpsych_lof_intolerant_genes(vds)
     return(vds)
 
+
+def reduce_parsed_annotation_vds(vds):
+    logger.info('Process columns in annotation VDS.')
+    vds = vds.annotate_variants_expr('va = drop(va, vep, tcsq)')
+    vds = vds.annotate_variants_expr(
+        """
+        va.mpc = select(va.mpc, MPC),
+        va.cadd10 = select(va.cadd10, phred),
+        va.cadd13 = select(va.cadd13, phred),
+        va.splice = select(va.splice, splice_position, gene_id, gene_name, splice_region_damaging),
+        va.ann.canonical = drop(va.ann.canonical, min_tcsq),
+        va.ann.basic = drop(va.ann.basic, min_tcsq),
+        va.ann.all = drop(va.ann.all, min_tcsq)
+        """
+    )
+    return(vds)
+    
 def get_annotation_table(
     vds, 
     filter_expr = 'va.ann.all.minscore <= 15',
@@ -968,8 +1159,8 @@ def get_detailed_annotations_table_split_by_gene(avds, keep_cols = ['va.cadd13.p
         for col in [ 
             'gene_id',  'minscore', 'minterm', 
             'csq', 'loftee', 'polyphen', 
-            'transcript_id', 'transcript_dict',
-            'aachange', 'cdchange', 'aachange_dict', 'cdchange_dict' 
+            'transcript_dict', # 'transcript_id', # aachange', 'cdchange', 
+            'aachange_dict', 'cdchange_dict' 
         ]
     ]
     logger.info('Get annotation keytable.')

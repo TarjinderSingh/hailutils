@@ -176,7 +176,7 @@ def prune_samples(kinship_kt, sample_kt = None, tiebreak_expr = None, min_k = No
 def sex_check(vds):
     logger.info('Read in 1000 Genomes variants (with sex chromosomes).')
     kt = (
-        hc
+        vds.hc
             .read_table('gs://exome-qc/resources/1000-genomes-phase3/ALL.wgs.phase3_shapeit2_mvncall_integrated_v5a.20130502.snps.maf005.sites.kt')
             .filter('v.contig == "22" || v.contig == "X" || v.contig == "Y"')
     )
