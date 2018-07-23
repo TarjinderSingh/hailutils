@@ -68,11 +68,7 @@ def pc_relate_subset(
     logger.info(
         'Run PC-Relate with the following parameters: k = %s, maf = %s, and blocksize = %s.', 
         k, maf, block_size)
-    return(
-       vds
-            .pc_relate(k = k, maf = maf, block_size = block_size)
-            .filter('kin >= {}'.format(min_kin))
-    )
+    return(vds.pc_relate(k = k, maf = maf, block_size = block_size, min_kinship = min_kin))
 
 def pc_project(vds, pc_vds, pca_loadings_root = 'va.pca_loadings'):
     """

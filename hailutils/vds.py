@@ -213,5 +213,5 @@ def join_vds(vds_list):
 def drop_all_annotations(vds):
     return(vds.annotate_variants_expr('va = {{}}'))
 
-def annotate_variants_vds(vds, avds):
+def annotate_with_other_vds(vds, avds):
     return(vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)'))
