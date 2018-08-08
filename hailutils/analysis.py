@@ -224,13 +224,13 @@ def annotate_mpc_expr(new_col = 'va.csq2', csq_col = 'va.ann.canonical.csq', mpc
         mpc_col = quo(mpc_col)
     expr = '''
     {0} = 
-        if (isDefined({1}) && {1} >= 3 && {2} == "mis") 
+        if (isDefined({1}) && {1} >= 3) 
             "mis3"
-        else if (isDefined({1}) && {1} >= 2 && {2} == "mis") 
+        else if (isDefined({1}) && {1} >= 2) 
             "mis2"
-        else if (isDefined({1}) && {1} >= 1.5 && {2} == "mis") 
+        else if (isDefined({1}) && {1} >= 1.5) 
             "mis15"
-        else if (isDefined({1}) && {1} >= 1 && {2} == "mis") 
+        else if (isDefined({1}) && {1} >= 1) 
             "mis1"    
         else 
             {2}

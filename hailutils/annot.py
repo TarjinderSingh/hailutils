@@ -829,6 +829,18 @@ def annotate_ccrs(vds):
         )
     )
 
+def annotate_variants_lcr(vds, cloud = True):
+    logger.info('Annotate with LCRs.')
+    path = 'gs://exome-qc/resources/lcrs/LCR-hs37d5.bed' if cloud else 'file:///psych/genetics_data/tsingh/projects/sczexomes/resources/lcrs/LCR-hs37d5.bed'
+    lcr_kt = KeyTable.import_bed(path)
+    return(vds.annotate_variants_table(lcr_kt, expr = 'va.in_lcr = table'))
+
+def annotate_variants_segdup(vds, cloud = True):
+    logger.info('Annotate with SegDups.')
+    path = 'gs://exome-qc/resources/segdup/hg19_self_chain_split_both.bed' if cloud else 'file:///psych/genetics_data/tsingh/projects/sczexomes/resources/segdup/hg19_self_chain_split_both.bed'
+    lcr_kt = KeyTable.import_bed(path)
+    return(vds.annotate_variants_table(lcr_kt, expr = 'va.in_lcr = table'))
+
 def get_gencode_keytable():
     return(KeyTable.import_bed('gs://exome-qc/resources/gencode_v19/gencode.v19.cds.merged_by_exonid.merged.bed'))
 
