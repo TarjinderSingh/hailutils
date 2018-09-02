@@ -839,7 +839,7 @@ def annotate_variants_segdup(vds, cloud = True):
     logger.info('Annotate with SegDups.')
     path = 'gs://exome-qc/resources/segdup/hg19_self_chain_split_both.bed' if cloud else 'file:///psych/genetics_data/tsingh/projects/sczexomes/resources/segdup/hg19_self_chain_split_both.bed'
     lcr_kt = KeyTable.import_bed(path)
-    return(vds.annotate_variants_table(lcr_kt, expr = 'va.in_lcr = table'))
+    return(vds.annotate_variants_table(lcr_kt, expr = 'va.in_segdup = table'))
 
 def get_gencode_keytable():
     return(KeyTable.import_bed('gs://exome-qc/resources/gencode_v19/gencode.v19.cds.merged_by_exonid.merged.bed'))
@@ -859,30 +859,29 @@ def get_maskext_keytable():
             'gs://sczmeta_exomes/data/coverage/release_v1.5/high_confidence_regions_extended_10x80_20170910.bed')
     )
 
-def annotate_well_covered_regions(vds, cloud = True):
+def annotate_variants_hcr(vds):
     logger.info('Read well-covered regions for annotation.')
-    path = 'gs://sczmeta_exomes/data/coverage/release_v2.0/2018-05-18_schema-high-confidence-regions.bed' if cloud else 'file:///psych/genetics_data/tsingh/projects/sczexomes/coverage/release_v2.0/2018-05-18_schema-high-confidence-regions.bed'
-    rkt = KeyTable.import_bed(path)
-
+    rkt = KeyTable.import_bed('gs://sczmeta_exomes/data/coverage/release_v2.0.5/2018-06-28_schema-high-confidence-regions.bed')
     # List of coverage masks to apply on data
     coverage_list = [
-        'all_cds_extended_consensus_regions_3',
-        'all_cds_extended_consensus_regions_strict',
-        'agilent_v2_cds_extended_consensus_regions_strict',  
-        'agilent_v2_cds_extended_consensus_regions_3',
-        'danish_cds_extended_consensus_regions_strict',
-        'non_nextera_cds_extended_consensus_regions_strict',
-        'non_nextera_cds_extended_consensus_regions_3',
-        'nextera_cds_extended_consensus_regions_strict',
-        'nextera_cds_extended_consensus_regions_3',
-        'all_high_qual_cds_extended_consensus_regions_strict',
-        'all_high_qual_cds_extended_consensus_regions_3'
-    ]
+        r.format(c, s)
+        for r in [
+            'all_{}_consensus_regions_{}',
+            'agilent_v2_{}_consensus_regions_{}',
+            'danish_{}_consensus_regions_{}',
+            'non_nextera_{}_consensus_regions_{}',
+            'nextera_{}_consensus_regions_{}',
+            'all_high_qual_{}_consensus_regions_{}'
+        ]
+        for c in [ 'cds_extended', 'called_regions' ]
+        for s in [ '3', 'strict' ] 
+    ] 
 
     logger.info('Annotate VDS with coverage regions.')
     for c in coverage_list:
-        logger.info('Annotate VDS with the following mask: %s', c)
+        logger.info('Annotated VDS with HCRs: %s', c)
         intervals = rkt.filter('target == "{}"'.format(c)).drop('target')
+        logger.info('Number of rows: %s', intervals.count())
         vds = vds.annotate_variants_table(intervals, root = 'va.hcrs.{}'.format(c))
     return(vds)
 
