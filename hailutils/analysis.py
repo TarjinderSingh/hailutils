@@ -59,13 +59,13 @@ def exact_keytable(vds, test = 'fisher', minCellCount = 5):
     logger.info('Annotate variants with counts.')
     vds = vds.annotate_variants_expr(
         [
-            'va.exact.Xcase = gs.filter(g => sa.pheno.isCase).map(g => g.nNonRefAlleles()).sum()',
-            'va.exact.Xctrl = gs.filter(g => !sa.pheno.isCase).map(g => g.nNonRefAlleles()).sum()',
-            'va.exact.Ncase = gs.filter(g => sa.pheno.isCase).map(g => g.isCalled()).count()',
-            'va.exact.Nctrl = gs.filter(g => !sa.pheno.isCase).map(g => g.isCalled()).count()',
-            'va.exact.N = gs.map(g => g.isCalled()).count()',
-            'va.exact.Xrcase = gs.filter(g => sa.pheno.isCase).map(g => 2 - g.nNonRefAlleles()).sum()',
-            'va.exact.Xrctrl = gs.filter(g => !sa.pheno.isCase).map(g => 2 - g.nNonRefAlleles()).sum()',
+            'va.exact.Xcase = gs.filter(g => sa.pheno.isCase && g.isCalled()).map(g => g.nNonRefAlleles()).sum()',
+            'va.exact.Xctrl = gs.filter(g => !sa.pheno.isCase && g.isCalled()).map(g => g.nNonRefAlleles()).sum()',
+            'va.exact.Ncase = gs.filter(g => sa.pheno.isCase && g.isCalled()).count()',
+            'va.exact.Nctrl = gs.filter(g => !sa.pheno.isCase && g.isCalled()).count()',
+            'va.exact.N = gs.filter(g => g.isCalled()).count()',
+            'va.exact.Xrcase = gs.filter(g => sa.pheno.isCase && g.isCalled()).map(g => 2 - g.nNonRefAlleles()).sum()',
+            'va.exact.Xrctrl = gs.filter(g => !sa.pheno.isCase && g.isCalled()).map(g => 2 - g.nNonRefAlleles()).sum()',
         ]
     )
 

@@ -38,6 +38,8 @@ def generate_genesets_dict(data):
     data : {[type]}
         [description]
     '''
+    import pandas as pd
+    from pyrunner.pycore import ProgressBar
     names = list(set(data.name))
     bar = ProgressBar(names, 0.01, 50)
     logger.info('Convert to dictionary.')
@@ -59,6 +61,7 @@ def conditional_genesets_table(data, cond_name = 'gnomAD_constraint_category__pL
     label : {str}, optional
         String for indicating a gene set has been conditioned. (the default is 'pLI', which [default_description])
     '''
+    import pandas as pd
     cond_genes = list(set(data[data.name == cond_name].gene_id.tolist()))
     
     df = data[data.name == cond_name]
@@ -170,7 +173,7 @@ def geneset_annotated_genotypes_table(vds, freq_expr = '(isMissing(va.AC_filt_al
     gkt = (
         vds
             .filter_variants_expr(freq_expr)
-            .annotate_variants_expr('va = select(va, s, csq, gt, genesets, expression_proportions)')
+            .annotate_variants_expr('va = select(va, s, csq, gt, genesets)') # , expression_proportions
             .variants_table()
             .flatten()
     )
@@ -178,7 +181,7 @@ def geneset_annotated_genotypes_table(vds, freq_expr = '(isMissing(va.AC_filt_al
 
 def geneset_counts_table(
     gkt, 
-    anns = [ 'all_expr', 'all', 'canonical', 'basic',  'cseven', 'pfour', 'pthree', 'pseven', 'primate' ], 
+    anns = [ 'all', 'canonical', 'basic',  'cseven', 'pfour', 'pthree', 'pseven', 'primate' ],  # 'all_expr', 
     genesets = [ 'gnomAD_constraint_category__pLI', 'gnomAD_constraint_category__pNull', 'gnomAD_constraint_category__All' ]
 ):
     '''
