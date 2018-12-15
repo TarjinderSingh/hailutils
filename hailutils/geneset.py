@@ -19,7 +19,6 @@ def read_genesets_table(path = '/psych/genetics_data/tsingh/projects/sczexomes/a
     path : {str}, optional
         Location of the gene set file.(the default is '/psych/genetics_data/tsingh/projects/sczexomes/analysis/release_v2.0.5/2018-07-19_merged-genesets-for-analysis.tsv', which [default_description])
     '''
-    
     import pandas as pd
 
     logger.info('Read gene sets.')
@@ -101,8 +100,14 @@ def annotate_geneset(vds, name, gene_ids = None, gene_key = 'va.ann.canonical.ge
     return(vds)
 
 def annotate_genesets_dict(vds, geneset_dict, gene_key = 'va.ann.canonical.gene_id', ann_label = 'canonical'):
+    from pyrunner.pycore import ProgressBar
+    
+    names = geneset_dict.keys()
+    bar = ProgressBar(names, 0.01, 50)
+    logger.info('Annotating gene sets as global.')
     for key in geneset_dict:
         vds = vds.annotate_global('global.{}'.format(key), geneset_dict[key], TSet(TString()))
+        bar.update()
     exprs = [
                 '''
                 va.genesets.{0}.{1} = 
@@ -114,6 +119,7 @@ def annotate_genesets_dict(vds, geneset_dict, gene_key = 'va.ann.canonical.gene_
                 for key in geneset_dict
         
     ]
+    logger.info('Annotate variants with gene sets.')
     vds = vds.annotate_variants_expr(exprs)
     return(vds)
 
@@ -159,6 +165,7 @@ def annotate_variants_geneset(vds, geneset_dict, anns = [ 'all', 'canonical', 'b
     '''
     logger.info('Annotate with genesets.')
     for ann in anns:
+        logger.info('Ann %s', ann)
         vds = annotate_genesets_dict(vds, geneset_dict, gene_key = 'va.ann.{}.gene_id'.format(ann), ann_label = ann)
     return(vds)
 
@@ -185,17 +192,22 @@ def geneset_annotated_genotypes_table(vds, freq_expr = '(isMissing(va.AC_filt_al
 def geneset_counts_table(
     gkt, 
     anns = [ 'all', 'canonical', 'basic',  'cseven', 'pfour', 'pthree', 'pseven', 'primate' ],  # 'all_expr', 
-    genesets = [ 'gnomAD_constraint_category__pLI', 'gnomAD_constraint_category__pNull', 'gnomAD_constraint_category__All' ]
+    genesets = [ 'gnomAD_constraint_category__pLI', 'gnomAD_constraint_category__pNull', 'gnomAD_constraint_category__All' ],
+    first_repartition = 100, second_repartition = 500
 ):
     '''
     Export gene set counts table from gene set genotype table.
     '''
-    logger.info('Reduce to 100 partitions.')
-    gkt = gkt.repartition(100, shuffle = False)
+    from pyrunner.pycore import ProgressBar
+    
+    if first_repartition:
+        logger.info('Reduce to %s partitions.', first_repartition)
+        gkt = gkt.repartition(first_repartition, shuffle = False)
 
     logger.info('Define gene set loop.')
     exprs = [ '`va.genesets.{}.{}`'.format(ann, g) for ann in anns for g in genesets  ]
     
+    bar = ProgressBar(exprs, 0.01, 50)
     logger.info('Generate non-ref counts for gene sets.')
     kt_list = []
     for expr in exprs:
@@ -211,6 +223,9 @@ def geneset_counts_table(
                 )
                 .annotate('name = "{}", ann = "{}"'.format(name, ann))
         )
-    logger.info('Join results keytables and repartition to 500.')
-    kt = union_keytables(kt_list).repartition(500, shuffle = False)
+        bar.update()
+    logger.info('Join results keytables and repartition to %s.', second_repartition)
+    kt = union_keytables(kt_list)
+    if second_repartition:
+        kt = kt.repartition(second_repartition, shuffle = False)
     return(kt)
