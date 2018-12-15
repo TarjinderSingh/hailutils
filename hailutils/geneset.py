@@ -19,6 +19,9 @@ def read_genesets_table(path = '/psych/genetics_data/tsingh/projects/sczexomes/a
     path : {str}, optional
         Location of the gene set file.(the default is '/psych/genetics_data/tsingh/projects/sczexomes/analysis/release_v2.0.5/2018-07-19_merged-genesets-for-analysis.tsv', which [default_description])
     '''
+    
+    import pandas as pd
+
     logger.info('Read gene sets.')
     data = pd.read_table(path)
     logger.info('Clean up table.')
