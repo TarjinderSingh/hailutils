@@ -215,3 +215,21 @@ def drop_all_annotations(vds):
 
 def annotate_with_other_vds(vds, avds):
     return(vds.annotate_variants_vds(avds, expr = 'va = merge(va, vds)'))
+
+def convert_01_type(s):
+    # s is the str(variant_schema) from Hail 0.1
+    import re
+    s = re.sub(r'''@\w+="[^"]+"''', "", s)
+    s = s.replace('String', 'str')
+    s = s.replace('Int', 'int32')
+    s = s.replace('Double', 'float64')
+    s = s.replace('Float', 'float32')
+    s = s.replace('Boolean', 'bool')
+    s = s.replace('[', '<')
+    s = s.replace(']', '>')
+    s = s.replace('Long', 'int64')
+    s = s.replace('Array', 'array')
+    s = s.replace('Set', 'set')
+    s = s.replace('Struct', 'struct')
+    return(s)
+
