@@ -1,1 +1,1 @@
-__all__ = ["analysis", "annot", "keytable", "vds", "sampleqc", "variantqc"]
+__all__ = ["analysis", "annot", "keytable", "vds", "sampleqc", "variantqc", "cloudio", "geneset"]
